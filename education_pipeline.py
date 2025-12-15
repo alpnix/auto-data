@@ -33,7 +33,7 @@ class EducationDataPipeline:
         self.milvus_collection = None
         self.openai_client = None
         self.brave_key = os.getenv('BRAVE_KEY')
-        self.google_api_key = os.getenv('GOOGLE_API_KEY')
+        self.google_api_key = os.getenv('GOOGLE_SEARCH_API')
         self.google_cse_id = os.getenv('GOOGLE_CSE_ID')
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
 
@@ -165,9 +165,10 @@ class EducationDataPipeline:
 
     def search(self, query: str, count: int = 5) -> List[Dict]:
         """Search using available APIs with fallback"""
-        results = self.search_brave(query, count)
+        # Use Google first, fallback to Brave
+        results = self.search_google(query, count)
         if not results:
-            results = self.search_google(query, count)
+            results = self.search_brave(query, count)
         return results
 
     def scrape_content(self, url: str) -> Optional[str]:
