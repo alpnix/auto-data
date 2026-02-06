@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Pipeline Setup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 500;
+            color: #fff;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .setup-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 800px) {
+            .setup-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card h2 {
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            color: #888;
+        }
+
+        .drop-zone {
+            border: 2px dashed #333;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #111;
+        }
+
+        .drop-zone:hover {
+            border-color: #00ff88;
+            background: #0a1a0f;
+        }
+
+        .drop-zone.dragover {
+            border-color: #00ff88;
+            background: #0a1a0f;
+            transform: scale(1.02);
+        }
+
+        .drop-zone.has-file {
+            border-color: #00ff88;
+            border-style: solid;
+        }
+
+        .drop-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        .drop-text {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .drop-hint {
+            font-size: 11px;
+            color: #555;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #0a0a0a;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .file-name {
+            color: #00ff88;
+            font-weight: 500;
+        }
+
+        .file-size {
+            color: #666;
+            margin-left: 10px;
+        }
+
+        .extra-instructions {
+            grid-column: 1 / -1;
+        }
+
+        textarea {
+            width: 100%;
+            background: #111;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
+            padding: 12px;
+            color: #fff;
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #00ff88;
+        }
+
+        textarea::placeholder {
+            color: #555;
+        }
+
+        .actions {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            padding: 14px 28px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #00dd77;
+        }
+
+        button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #2a2a2a;
+            color: #fff;
+        }
+
+        button.secondary:hover {
+            background: #333;
+        }
+
+        .status-text {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .log-section {
+            grid-column: 1 / -1;
+        }
+
+        .log-container {
+            background: #111;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 3px 0;
+            color: #aaa;
+        }
+
+        .log-entry.INFO { color: #888; }
+        .log-entry.OK { color: #00ff88; }
+        .log-entry.WARN { color: #ffaa44; }
+        .log-entry.ERROR { color: #ff4444; }
+
+        .config-preview {
+            grid-column: 1 / -1;
+            display: none;
+        }
+
+        .config-preview.show {
+            display: block;
+        }
+
+        .config-code {
+            background: #111;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 400px;
+            overflow: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            color: #aaa;
+        }
+
+        .success-banner {
+            background: #0a1a0f;
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            display: none;
+            grid-column: 1 / -1;
+        }
+
+        .success-banner.show {
+            display: block;
+        }
+
+        .success-banner h3 {
+            color: #00ff88;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .success-banner p {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .success-banner a {
+            color: #00ff88;
+            text-decoration: none;
+        }
+
+        .success-banner a:hover {
+            text-decoration: underline;
+        }
+
+        .schema-preview {
+            margin-top: 15px;
+            padding: 10px;
+            background: #0a0a0a;
+            border-radius: 4px;
+            font-size: 11px;
+            display: none;
+        }
+
+        .schema-preview.show {
+            display: block;
+        }
+
+        .schema-item {
+            margin: 5px 0;
+            color: #888;
+        }
+
+        .schema-item span {
+            color: #00ff88;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Research Pipeline Setup</h1>
+            <p class="subtitle">Drop your instruction document and dataset to auto-configure the pipeline</p>
+        </header>
+
+        <div class="setup-grid">
+            <!-- Instructions File -->
+            <div class="card">
+                <h2>1. Instructions Document</h2>
+                <div class="drop-zone" id="instructions-drop" onclick="document.getElementById('instructions-input').click()">
+                    <div class="drop-icon">📄</div>
+                    <div class="drop-text">Drop instructions file here</div>
+                    <div class="drop-hint">TXT, MD, or paste text below</div>
+                </div>
+                <input type="file" id="instructions-input" accept=".txt,.md,.doc,.docx">
+                <div class="file-info" id="instructions-info" style="display: none;">
+                    <span class="file-name" id="instructions-name"></span>
+                    <span class="file-size" id="instructions-size"></span>
+                </div>
+                <textarea id="instructions-text" placeholder="Or paste your instructions here...
+
+Example:
+- Research goal: Collect faculty information
+- Look for degree info in profile pages
+- Email format: username@institution.edu" style="margin-top: 15px;"></textarea>
+            </div>
+
+            <!-- Dataset File -->
+            <div class="card">
+                <h2>2. Dataset Schema (CSV)</h2>
+                <div class="drop-zone" id="dataset-drop" onclick="document.getElementById('dataset-input').click()">
+                    <div class="drop-icon">📊</div>
+                    <div class="drop-text">Drop dataset CSV here</div>
+                    <div class="drop-hint">CSV with headers and sample data</div>
+                </div>
+                <input type="file" id="dataset-input" accept=".csv">
+                <div class="file-info" id="dataset-info" style="display: none;">
+                    <span class="file-name" id="dataset-name"></span>
+                    <span class="file-size" id="dataset-size"></span>
+                </div>
+                <div class="schema-preview" id="schema-preview">
+                    <div class="schema-item">Entity Type: <span id="schema-type"></span></div>
+                    <div class="schema-item">Entity Fields: <span id="schema-entity"></span></div>
+                    <div class="schema-item">Target Fields: <span id="schema-target"></span></div>
+                    <div class="schema-item">Total Rows: <span id="schema-rows"></span></div>
+                </div>
+                <div class="row-range" id="row-range" style="display: none; margin-top: 15px;">
+                    <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Select Row Range:</div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="start-row" min="0" value="0" style="width: 80px; background: #111; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px; color: #fff; font-size: 13px;">
+                        <span style="color: #666;">to</span>
+                        <input type="number" id="end-row" min="1" value="10" style="width: 80px; background: #111; border: 1px solid #2a2a2a; border-radius: 4px; padding: 8px; color: #fff; font-size: 13px;">
+                        <span style="color: #555; font-size: 11px;" id="row-count-label">(10 entities)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extra Instructions -->
+            <div class="card extra-instructions">
+                <h2>3. Additional Instructions (Optional)</h2>
+                <textarea id="extra-instructions" placeholder="Add any extra guidance for the agent...
+
+Example:
+- Focus on US institutions only
+- Prioritize .edu domains
+- Look for LinkedIn profiles as backup"></textarea>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <button id="generate-btn" onclick="generateConfig()" disabled>Generate Configuration</button>
+                <button id="apply-btn" class="secondary" onclick="applyConfig()" style="display: none;">Apply & Save</button>
+                <span class="status-text" id="status-text">Upload both files to continue</span>
+            </div>
+
+            <!-- Log Section -->
+            <div class="card log-section" id="log-section" style="display: none;">
+                <h2>Agent Log</h2>
+                <div class="log-container" id="log-container"></div>
+            </div>
+
+            <!-- Config Preview -->
+            <div class="card config-preview" id="config-preview">
+                <h2>Generated Configuration</h2>
+                <pre class="config-code" id="config-code"></pre>
+            </div>
+
+            <!-- Success Banner -->
+            <div class="success-banner" id="success-banner">
+                <h3>Configuration Applied!</h3>
+                <p>pipeline_config.py has been updated with your new dataset configuration.</p>
+                <p><a href="/research">Go to Research Dashboard →</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let instructionsContent = '';
+        let datasetContent = '';
+        let generatedConfig = null;
+        let totalRows = 0;
+
+        // File drop handling
+        function setupDropZone(dropId, inputId, infoId, nameId, sizeId, onLoad) {
+            const dropZone = document.getElementById(dropId);
+            const input = document.getElementById(inputId);
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+                dropZone.addEventListener(event, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+
+            ['dragenter', 'dragover'].forEach(event => {
+                dropZone.addEventListener(event, () => dropZone.classList.add('dragover'));
+            });
+
+            ['dragleave', 'drop'].forEach(event => {
+                dropZone.addEventListener(event, () => dropZone.classList.remove('dragover'));
+            });
+
+            dropZone.addEventListener('drop', e => {
+                const file = e.dataTransfer.files[0];
+                if (file) handleFile(file, dropZone, infoId, nameId, sizeId, onLoad);
+            });
+
+            input.addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (file) handleFile(file, dropZone, infoId, nameId, sizeId, onLoad);
+            });
+        }
+
+        function handleFile(file, dropZone, infoId, nameId, sizeId, onLoad) {
+            const info = document.getElementById(infoId);
+            const nameEl = document.getElementById(nameId);
+            const sizeEl = document.getElementById(sizeId);
+
+            nameEl.textContent = file.name;
+            sizeEl.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+            info.style.display = 'block';
+            dropZone.classList.add('has-file');
+
+            const reader = new FileReader();
+            reader.onload = e => onLoad(e.target.result);
+            reader.readAsText(file);
+        }
+
+        // Setup drop zones
+        setupDropZone('instructions-drop', 'instructions-input', 'instructions-info',
+            'instructions-name', 'instructions-size', content => {
+                instructionsContent = content;
+                document.getElementById('instructions-text').value = content;
+                checkReady();
+            });
+
+        setupDropZone('dataset-drop', 'dataset-input', 'dataset-info',
+            'dataset-name', 'dataset-size', content => {
+                datasetContent = content;
+                previewSchema(content);
+                checkReady();
+            });
+
+        // Also listen to textarea changes
+        document.getElementById('instructions-text').addEventListener('input', e => {
+            instructionsContent = e.target.value;
+            checkReady();
+        });
+
+        async function previewSchema(csv) {
+            // Quick client-side preview
+            const lines = csv.trim().split('\n');
+            if (lines.length < 2) return;
+
+            const headers = lines[0].split(',').map(h => h.trim());
+            const preview = document.getElementById('schema-preview');
+
+            // Simple heuristic for entity fields
+            const entityFields = headers.filter(h =>
+                h.toLowerCase().includes('name') ||
+                h.toLowerCase().includes('institution') ||
+                h.toLowerCase().includes('id')
+            ).slice(0, 2);
+
+            const targetFields = headers.filter(h => !entityFields.includes(h));
+
+            totalRows = lines.length - 1;
+
+            document.getElementById('schema-type').textContent =
+                headers[0].toLowerCase().includes('name') ? 'person' : 'entity';
+            document.getElementById('schema-entity').textContent = entityFields.join(', ') || 'auto-detect';
+            document.getElementById('schema-target').textContent =
+                targetFields.slice(0, 5).join(', ') + (targetFields.length > 5 ? '...' : '');
+            document.getElementById('schema-rows').textContent = totalRows;
+
+            preview.classList.add('show');
+
+            // Show row range selector
+            const rowRange = document.getElementById('row-range');
+            const endRowInput = document.getElementById('end-row');
+            endRowInput.max = totalRows;
+            endRowInput.value = Math.min(10, totalRows);
+            document.getElementById('start-row').max = totalRows - 1;
+            rowRange.style.display = 'block';
+            updateRowCountLabel();
+        }
+
+        function updateRowCountLabel() {
+            const start = parseInt(document.getElementById('start-row').value) || 0;
+            const end = parseInt(document.getElementById('end-row').value) || totalRows;
+            const count = Math.max(0, end - start);
+            document.getElementById('row-count-label').textContent = `(${count} entities)`;
+        }
+
+        // Add listeners for row range inputs
+        document.getElementById('start-row').addEventListener('input', updateRowCountLabel);
+        document.getElementById('end-row').addEventListener('input', updateRowCountLabel);
+
+        function checkReady() {
+            const hasInstructions = instructionsContent.trim().length > 0;
+            const hasDataset = datasetContent.trim().length > 0;
+
+            const btn = document.getElementById('generate-btn');
+            const status = document.getElementById('status-text');
+
+            if (hasInstructions && hasDataset) {
+                btn.disabled = false;
+                status.textContent = 'Ready to generate configuration';
+            } else if (hasInstructions) {
+                btn.disabled = true;
+                status.textContent = 'Upload dataset CSV to continue';
+            } else if (hasDataset) {
+                btn.disabled = true;
+                status.textContent = 'Add instructions to continue';
+            } else {
+                btn.disabled = true;
+                status.textContent = 'Upload both files to continue';
+            }
+        }
+
+        function addLog(message) {
+            const container = document.getElementById('log-container');
+            const level = message.match(/\[(.*?)\]/)?.[1] || 'INFO';
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level}`;
+            entry.textContent = message;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function generateConfig() {
+            const btn = document.getElementById('generate-btn');
+            const status = document.getElementById('status-text');
+            const logSection = document.getElementById('log-section');
+            const logContainer = document.getElementById('log-container');
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            status.textContent = 'Agent is analyzing your files...';
+
+            logSection.style.display = 'block';
+            logContainer.innerHTML = '';
+
+            addLog('[INFO] Starting agentic setup process...');
+
+            try {
+                const startRow = parseInt(document.getElementById('start-row').value) || 0;
+                const endRow = parseInt(document.getElementById('end-row').value) || null;
+
+                const response = await fetch('/api/setup/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        instructions: instructionsContent,
+                        dataset: datasetContent,
+                        extra: document.getElementById('extra-instructions').value,
+                        start_row: startRow,
+                        end_row: endRow
+                    })
+                });
+
+                const result = await response.json();
+
+                // Display logs
+                if (result.logs) {
+                    result.logs.forEach(log => addLog(log));
+                }
+
+                if (result.success && result.config) {
+                    generatedConfig = result.config;
+
+                    // Show config preview
+                    const preview = document.getElementById('config-preview');
+                    document.getElementById('config-code').textContent = result.config;
+                    preview.classList.add('show');
+
+                    // Show apply button
+                    document.getElementById('apply-btn').style.display = 'inline-block';
+                    status.textContent = 'Configuration generated! Review and apply.';
+                    addLog('[OK] Configuration generated successfully');
+                } else {
+                    status.textContent = 'Generation failed. Check logs.';
+                    addLog('[ERROR] ' + (result.error || 'Unknown error'));
+                }
+
+            } catch (error) {
+                addLog('[ERROR] ' + error.message);
+                status.textContent = 'Error: ' + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Regenerate';
+            }
+        }
+
+        async function applyConfig() {
+            if (!generatedConfig) return;
+
+            const btn = document.getElementById('apply-btn');
+            const status = document.getElementById('status-text');
+
+            btn.disabled = true;
+            btn.textContent = 'Applying...';
+
+            addLog('[INFO] Writing configuration to pipeline_config.py...');
+
+            try {
+                const response = await fetch('/api/setup/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config: generatedConfig })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog('[OK] Configuration applied successfully!');
+                    document.getElementById('success-banner').classList.add('show');
+                    status.textContent = 'Configuration saved!';
+                } else {
+                    addLog('[ERROR] ' + (result.error || 'Failed to apply'));
+                    status.textContent = 'Failed to apply configuration';
+                }
+
+            } catch (error) {
+                addLog('[ERROR] ' + error.message);
+                status.textContent = 'Error: ' + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Apply & Save';
+            }
+        }
+    </script>
+</body>
+</html>
