@@ -8,7 +8,7 @@ Dataset-agnostic: reads entity/field definitions from pipeline_config.
 from flask import Flask, render_template, Response, jsonify
 import json
 import time
-from faculty_research_pipeline import ResearchPipeline
+from research_pipeline import ResearchPipeline
 from results_manager import ResultsManager
 from evaluation import Evaluator, QA_METRICS_AVAILABLE
 from config_helpers import load_config, get_entity_primary_value, get_entity_display

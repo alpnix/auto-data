@@ -4,7 +4,9 @@ Pipeline Configuration - Dynamic field definitions and prompts
 """
 
 DATASET_NAME = "faculty_research_dataset"
-DATASET_DESCRIPTION = "Compile a faculty dataset with structured information about education, professional details, and demographic data for each faculty member."
+DATASET_DESCRIPTION = "Compiled faculty dataset with structured information about education, professional details, and demographics for faculty members at Amherst College"
+
+ENTITY_SCHEMA = {"primary_field": "name", "fields": ["name", "institution"]}
 
 TARGET_ENTITIES = [
     {
@@ -22,159 +24,226 @@ TARGET_ENTITIES = [
     {
         "institution": "164465 - Amherst College (MA)",
         "name": "Judith Frank"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Robert Hayashi"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Jallicia Jolly"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Karen Sanchez-Eppler"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Kiara Vigil"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Vanessa Fong"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Deborah Gewertz"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Jerome Himmelstein"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Victoria Nguyen"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Li Zhang"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Gabriel Arboleda"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Dwight Carey"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Nicola Courtright"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Brian House"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Samuel Morse"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Yael Rice"
+    },
+    {
+        "institution": "164465 - Amherst College (MA)",
+        "name": "Natasha Staller"
     }
 ]
 
 EXTRACTION_FIELDS = [
     {
-        "key": "name",
-        "label": "Faculty Name",
-        "description": "Faculty member's name (begins each record)",
-        "example": "Francis Couvares",
-        "required": True
-    },
-    {
-        "key": "institutional_affiliation",
-        "label": "Institutional Affiliation",
-        "description": "Institution where faculty member is affiliated",
-        "example": "Amherst College",
-        "required": True
-    },
-    {
         "key": "phd_institution",
         "label": "PhD Institution",
-        "description": "Specific university where PhD was earned",
-        "example": "University of Michigan",
-        "required": True
+        "description": "Specific university where PhD was obtained",
+        "example": "Harvard University",
+        "required": False
     },
     {
         "key": "bachelors_institution",
         "label": "Bachelor's Institution",
-        "description": "Specific university where bachelor's degree was earned",
-        "example": "Harvard University",
-        "required": True
+        "description": "Specific university where bachelor's degree was obtained",
+        "example": "Stanford University",
+        "required": False
     },
     {
         "key": "alumni_status",
         "label": "Alumni Status",
         "description": "Alumni status where applicable",
-        "example": "Alumni of University of Michigan",
+        "example": "Alumni of Amherst College",
+        "required": False
+    },
+    {
+        "key": "institutional_email",
+        "label": "Institutional Email",
+        "description": "Institutional email address",
+        "example": "faculty@amherst.edu",
         "required": False
     },
     {
         "key": "academic_rank",
         "label": "Academic Rank",
         "description": "Academic rank (e.g., assistant professor, associate professor, full professor)",
-        "example": "Professor",
-        "required": True
-    },
-    {
-        "key": "department_affiliations",
-        "label": "Department Affiliations",
-        "description": "One or multiple departments (e.g., American Studies and History)",
-        "example": "American Studies and History",
-        "required": True
-    },
-    {
-        "key": "institutional_email",
-        "label": "Institutional Email",
-        "description": "Institutional email address",
-        "example": "fcouvares@amherst.edu",
+        "example": "Associate Professor",
         "required": False
     },
     {
         "key": "gender",
         "label": "Gender",
-        "description": "Gender (man or woman), only if publicly stated",
-        "example": "man",
+        "description": "Gender (man or woman), if publicly stated",
+        "example": "woman",
+        "required": False
+    },
+    {
+        "key": "department_affiliations",
+        "label": "Department Affiliations",
+        "description": "One or multiple departments (e.g., American Studies and History)",
+        "example": "Department of History and American Studies",
         "required": False
     },
     {
         "key": "profile_link",
         "label": "Profile Link",
-        "description": "Provided in Excel sheet for each faculty member",
-        "example": "https://www.amherst.edu/people/faculty/fcouvares",
-        "required": True
+        "description": "Link to official university profile page",
+        "example": "https://www.amherst.edu/people/faculty/jsmith",
+        "required": False
     }
 ]
 
 SEARCH_QUERY_TEMPLATES = [
-    "{name} Amherst College faculty profile",
-    "{name} {institution} professor",
-    "{name} Amherst College CV",
-    "{name} Amherst College department",
-    "Amherst College {name} research",
-    "{name} Amherst College email contact"
+    "{{name}} {{institution}} faculty profile",
+    "{{name}} Amherst College professor",
+    "{{name}} CV Amherst College",
+    "{{name}} Amherst College department",
+    "{{name}} Amherst College email contact",
+    "{{name}} Amherst College education background PhD"
 ]
 
-def get_extraction_prompt(entity_name: str, institution: str, context: str) -> str:
-    return f"""
-Extract structured information about the faculty member from the provided context.
-
-FACULTY MEMBER: {entity_name}
-INSTITUTION: {institution}
+def get_extraction_prompt(entity: dict, context: str) -> str:
+    name = entity.get('name', 'Unknown')
+    institution = entity.get('institution', 'Unknown')
+    
+    prompt = f"""Extract structured information about faculty member {name} from {institution}.
 
 CONTEXT:
 {context}
 
-INSTRUCTIONS:
-1. Extract ONLY the information explicitly stated in the context above.
-2. If information is not found, leave the field empty.
-3. For gender, only include if explicitly stated as "man" or "woman".
-4. For department affiliations, list all departments mentioned.
-5. For academic rank, use standard titles (e.g., Assistant Professor, Associate Professor, Professor).
+=== FIELD-SPECIFIC EXTRACTION INSTRUCTIONS ===
 
-Please provide the extracted information in the following format:
+1. **phd_institution** - PhD/Doctoral Institution
+   - Look for: "Ph.D.", "PhD", "Doctorate", "doctoral degree" followed by university name
+   - Where to find: Education section, CV, biography, "About" sections
+   - Pattern: "Ph.D. in [Field] from [University]" or "received her doctorate from [University]"
+   - Return: Just the university name (e.g., "Harvard University", "University of Michigan")
 
-Name: [Full name]
-Institutional Affiliation: [Institution name]
-PhD Institution: [University where PhD was earned]
-Bachelor's Institution: [University where bachelor's degree was earned]
-Alumni Status: [Alumni status if mentioned]
-Academic Rank: [Academic title]
-Department Affiliations: [Department(s)]
-Institutional Email: [Email address]
-Gender: [man/woman only if explicitly stated]
-Profile Link: [URL from context]
+2. **bachelors_institution** - Bachelor's/Undergraduate Institution
+   - Look for: "B.A.", "B.S.", "Bachelor", "undergraduate", "A.B." followed by university name
+   - Where to find: Education section, CV, biography
+   - Pattern: "B.A. from [University]" or "graduated from [University]"
+   - Return: Just the university name
 
-If any field cannot be found, write "Not found" for that field.
-"""
+3. **alumni_status** - Alumni of Current Institution
+   - Check if: Person received ANY degree from {institution}
+   - If they got BA/MA/PhD from {institution}: "Alumni"
+   - If not: "Non-Alum"
+   - If unclear: "Not available"
 
+4. **institutional_email** - Email Address
+   - Look for: Email addresses containing the institution domain
+   - Pattern: [username]@amherst.edu, [firstname][lastname]@[domain]
+   - Where to find: Contact section, profile header, CV
+   - Return: Full email address (e.g., "jsmith@amherst.edu")
+
+5. **academic_rank** - Professor Rank
+   - Look for exact titles: "Assistant Professor", "Associate Professor", "Full Professor", "Professor"
+   - Also look for: Named/endowed chairs (e.g., "John Smith Professor of History")
+   - Normalize to: "Assistant", "Associate", "Full", or the full title if endowed
+   - Don't confuse with: Visiting positions, adjunct, lecturer, emeritus
+
+6. **gender** - Gender
+   - Look for: Pronouns used (he/him = Man, she/her = Woman)
+   - Also: Direct statements about gender
+   - Return: "Man" or "Woman" only if clearly indicated
+   - If unclear: "Not available"
+
+7. **department_affiliations** - Department(s)
+   - Look for: Department names in profile, title, or affiliation sections
+   - Pattern: "Department of [X]", "Professor of [X]", "[X] Department"
+   - Multiple departments: Combine with "and" (e.g., "History and American Studies")
+   - Return: Department names without "Department of" prefix
+
+8. **profile_link** - Official Profile URL
+   - Look for: URLs from the institution's domain (amherst.edu)
+   - Pattern: https://www.amherst.edu/people/facstaff/[username]
+   - Prefer: Official faculty profile pages over news articles
+
+=== OUTPUT FORMAT ===
+
+Return ONLY a valid JSON object with these exact keys:
+
+{{
+  "phd_institution": "[University name or 'Not available']",
+  "bachelors_institution": "[University name or 'Not available']",
+  "alumni_status": "[Alumni/Non-Alum/Not available]",
+  "institutional_email": "[email@domain.edu or 'Not available']",
+  "academic_rank": "[Rank or 'Not available']",
+  "gender": "[Man/Woman/Not available]",
+  "department_affiliations": "[Department(s) or 'Not available']",
+  "profile_link": "[URL or 'Not available']"
+}}
+
+Return ONLY the JSON, no explanation or additional text."""
+    
+    return prompt
+
+# Ground truth for evaluation (keyed by primary field - faculty name)
+# Add entries here to enable accuracy evaluation during research
 GROUND_TRUTH = {
-    "Francis Couvares": {
-        "name": "Francis Couvares",
-        "institutional_affiliation": "164465 - Amherst College (MA)"
-    },
-    "Solsiree Del Moral": {
-        "name": "Solsiree Del Moral",
-        "institutional_affiliation": "164465 - Amherst College (MA)"
-    },
-    "Pawan Dhingra": {
-        "name": "Pawan Dhingra",
-        "institutional_affiliation": "164465 - Amherst College (MA)"
-    },
-    "Judith Frank": {
-        "name": "Judith Frank",
-        "institutional_affiliation": "164465 - Amherst College (MA)"
-    }
-}
-
-EVALUATION_CONFIG = {
-    "required_fields": ["name", "institutional_affiliation", "phd_institution", "bachelors_institution", "academic_rank", "department_affiliations", "profile_link"],
-    "optional_fields": ["alumni_status", "institutional_email", "gender"],
-    "validation_rules": {
-        "name": "Must match the target entity name",
-        "institutional_affiliation": "Should contain 'Amherst College'",
-        "phd_institution": "Should be a recognized university name",
-        "bachelors_institution": "Should be a recognized university name",
-        "academic_rank": "Should be a standard academic title",
-        "department_affiliations": "Should contain department names",
-        "profile_link": "Should be a valid URL",
-        "gender": "Should be either 'man', 'woman', or empty"
-    },
-    "scoring": {
-        "required_field_weight": 2.0,
-        "optional_field_weight": 1.0,
-        "accuracy_threshold": 0.8
-    }
+    # Example entry:
+    # "Francis Couvares": {
+    #     "phd_institution": "University of Michigan",
+    #     "institutional_email": "fgcouvares@amherst.edu",
+    #     "gender": "Man",
+    #     ...
+    # }
 }
