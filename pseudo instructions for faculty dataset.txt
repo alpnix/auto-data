@@ -1,0 +1,29 @@
+﻿These are the instructions for compiling the faculty dataset.
+Each record begins with the faculty member’s name and institutional affiliation. In addition, we are interested in collecting the following categories of information:
+* Education
+
+   * PhD: degree institution (specific university)
+
+   * Bachelor’s degree: degree institution (specific university)
+
+   * Alumni status, where applicable
+
+      * Professional information
+
+         * Academic rank (e.g., assistant professor, associate professor, full professor)
+
+         * Department affiliation(s) (one or multiple departments, e.g., American Studies and History)
+
+         * Institutional email address
+
+            * Demographic information
+
+               * Gender (man or woman), if publicly stated
+
+The provided Excel sheet already includes a profile link for each faculty member. The primary task is to use this link strategically to locate the required information. In most cases, the information can be found on official university profile pages, personal academic websites, CVs, or other publicly available materials.
+If a specific data field cannot be found:
+                  * Mark it as “Not available” if the information appears to be absent or not publicly disclosed.
+
+                  * Mark it as “Unable to retrieve” if the information may exist but could not be located.
+
+This defines the overall data collection approach.
