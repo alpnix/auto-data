@@ -34,39 +34,48 @@ load_dotenv()
 
 # Known model configurations
 # use_completion_tokens: True  → send max_completion_tokens instead of max_tokens
+# env_keys: list of env var names to try in order (first non-empty wins)
 MODEL_CONFIGS = {
     "deepseek-chat": {
         "provider": "deepseek",
         "base_url": "https://api.deepseek.com",
-        "env_key": "DEEPSEEK_API_KEY",
-        "label": "DeepSeek Chat",
+        "env_keys": ["DEEPSEEK_API_KEY", "DEEPSEEK_API"],  # support both naming conventions
+        "label": "DeepSeek Chat (V3)",
         "use_completion_tokens": False,
     },
     "gpt-5-nano": {
         "provider": "openai",
         "base_url": None,
-        "env_key": "OPENAI_API_KEY",
+        "env_keys": ["OPENAI_API_KEY"],
         "label": "GPT-5 Nano",
         "use_completion_tokens": True,
     },
     "gpt-4o-mini": {
         "provider": "openai",
         "base_url": None,
-        "env_key": "OPENAI_API_KEY",
+        "env_keys": ["OPENAI_API_KEY"],
         "label": "GPT-4o Mini",
         "use_completion_tokens": False,
     },
 }
 
-DEFAULT_MODEL = "gpt-5-nano"
+DEFAULT_MODEL = "deepseek-chat"
+
+
+def _resolve_api_key(cfg: dict) -> Optional[str]:
+    """Try each env var name in cfg['env_keys'] and return the first non-empty value."""
+    for key_name in cfg.get("env_keys", [cfg.get("env_key", "")]):
+        val = os.getenv(key_name)
+        if val:
+            return val
+    return None
 
 
 def get_available_models() -> List[Dict]:
     """Return list of models that have API keys configured."""
     available = []
     for model_id, cfg in MODEL_CONFIGS.items():
-        key = os.getenv(cfg["env_key"])
-        if key:
+        if _resolve_api_key(cfg):
             available.append({"id": model_id, "label": cfg["label"], "provider": cfg["provider"]})
     return available
 
@@ -77,9 +86,10 @@ def build_llm_client(model_id: str):
     if not cfg:
         raise ValueError(f"Unknown model: {model_id}")
 
-    api_key = os.getenv(cfg["env_key"])
+    api_key = _resolve_api_key(cfg)
     if not api_key:
-        raise ValueError(f"No API key found for {model_id} (env: {cfg['env_key']})")
+        tried = cfg.get("env_keys", [cfg.get("env_key", "")])
+        raise ValueError(f"No API key found for {model_id} (tried: {tried})")
 
     kwargs = {"api_key": api_key}
     if cfg.get("base_url"):
