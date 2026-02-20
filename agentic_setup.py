@@ -251,15 +251,26 @@ Return ONLY valid JSON."""
             response = self.client.chat.completions.create(
                 model=self.model_id,
                 messages=[
-                    {"role": "system", "content": "You are a research assistant that extracts structured information from instruction documents. Return only valid JSON."},
+                    {"role": "system", "content": "You are a data extraction assistant. Return ONLY a raw JSON object with no markdown fences, no explanation, no extra text."},
                     {"role": "user", "content": prompt}
                 ],
-                **self._make_token_kwargs(self.model_id, 1000)
+                **self._make_token_kwargs(self.model_id, 800)
             )
 
-            result_text = response.choices[0].message.content
+            msg = response.choices[0].message
+            result_text = msg.content or ""
 
-            # Clean up JSON
+            # Log refusal if model refused
+            if getattr(msg, 'refusal', None):
+                self.log(f"Model refused: {msg.refusal}", "WARN")
+
+            self.log(f"  → raw response length: {len(result_text)} chars")
+
+            if not result_text.strip():
+                self.log("Empty response from LLM — falling back to basic parsing", "WARN")
+                raise ValueError("Empty LLM response")
+
+            # Clean up JSON fences
             if "```json" in result_text:
                 result_text = result_text.split("```json")[1].split("```")[0].strip()
             elif "```" in result_text:
@@ -267,7 +278,7 @@ Return ONLY valid JSON."""
 
             result = json.loads(result_text)
 
-            self.log(f"Extracted goal: {result.get('goal', 'N/A')[:50]}...")
+            self.log(f"Extracted goal: {result.get('goal', 'N/A')[:80]}")
 
             return Instructions(
                 goal=result.get('goal', ''),
@@ -278,12 +289,18 @@ Return ONLY valid JSON."""
             )
 
         except Exception as e:
-            self.log(f"LLM parsing failed: {e}", "ERROR")
+            self.log(f"LLM parsing failed: {e} — using rule-based fallback", "WARN")
             import traceback
-            self.log(traceback.format_exc(), "ERROR")
+            self.log(traceback.format_exc(), "WARN")
+            # Rule-based fallback: extract hints by scanning for bullet/dash lines
+            hints = [
+                line.strip().lstrip('-•*').strip()
+                for line in instruction_text.splitlines()
+                if line.strip().startswith(('-', '•', '*')) and len(line.strip()) > 5
+            ]
             return Instructions(
-                goal="Extract information from web sources",
-                hints=[],
+                goal=instruction_text[:200].strip(),
+                hints=hints[:10],
                 search_strategies=[],
                 field_descriptions={},
                 raw_text=instruction_text
@@ -309,118 +326,80 @@ Return ONLY valid JSON."""
             self.log("No LLM client - cannot generate config", "ERROR")
             return None
 
-        # Build context for LLM
-        # Include ALL selected entities (not just samples)
+        # Build context for LLM.
+        # NOTE: We do NOT embed the full entity list in the prompt — _inject_entities
+        # force-injects them after generation. This keeps the prompt small enough for
+        # models with limited output budgets (e.g. gpt-5-nano).
         all_entities = schema.sample_entities
         entity_count = len(all_entities)
+        sample_entities = all_entities[:3]  # Only show 3 samples as examples
 
-        schema_info = f"""
-DATASET SCHEMA:
-- Entity Type: {schema.entity_type}
-- Entity Fields: {schema.entity_fields}
-- Target Fields to Extract: {json.dumps(schema.target_fields, indent=2)}
-- Total Entities to Process: {entity_count}
-- ALL Entities (MUST include ALL {entity_count} in TARGET_ENTITIES):
-{json.dumps(all_entities, indent=2)}
-"""
-
-        instructions_info = f"""
-RESEARCH INSTRUCTIONS:
-- Goal: {instructions.goal}
-- Hints: {json.dumps(instructions.hints)}
-- Search Strategies: {json.dumps(instructions.search_strategies)}
-- Field Guidance: {json.dumps(instructions.field_descriptions)}
-"""
-
-        if extra_instructions:
-            instructions_info += f"\nADDITIONAL INSTRUCTIONS:\n{extra_instructions}"
-
-        # Build entity field placeholders for search template instructions
         entity_field_keys = [self._to_snake_case(f) for f in schema.entity_fields]
         entity_placeholder_examples = ", ".join([f'{{{{{k}}}}}' for k in entity_field_keys])
 
+        target_fields_summary = ", ".join(f['key'] for f in schema.target_fields)
+
         prompt = f"""Generate a Python configuration file for a research data pipeline.
 
-{schema_info}
+DATASET:
+- Entity type: {schema.entity_type}
+- Entity fields (identify the entity): {entity_field_keys}
+- Fields to extract: {target_fields_summary}
+- Sample entities (3 of {entity_count} total):
+{json.dumps(sample_entities, indent=2)}
 
-{instructions_info}
+RESEARCH GOAL: {instructions.goal[:300]}
+HINTS: {json.dumps(instructions.hints[:5])}
+FIELD GUIDANCE: {json.dumps(dict(list(instructions.field_descriptions.items())[:6]))}
+{f"EXTRA: {extra_instructions[:200]}" if extra_instructions else ""}
 
-Generate a complete pipeline_config.py file with:
+Generate a complete pipeline_config.py with these sections:
 
-1. DATASET_NAME and DATASET_DESCRIPTION
-2. ENTITY_SCHEMA dict - with "primary_field" (should be 'name' for people, or the main identifier) and "fields" (list of all entity dict key names)
-3. TARGET_ENTITIES list - CRITICAL: You MUST include ALL {entity_count} entities provided above. Copy them exactly.
-4. EXTRACTION_FIELDS list - each field should have:
-   - key: snake_case identifier
-   - label: Human readable label
-   - description: DETAILED extraction guidance (what to look for, where to find it, common patterns)
-   - example: An example value
-   - required: True/False
-5. SEARCH_QUERY_TEMPLATES list - generate 4-6 search templates using entity field placeholders like {entity_placeholder_examples}
-   IMPORTANT: Use DOUBLE BRACES for placeholders: {{{{name}}}}, {{{{institution}}}}, etc.
-6. get_extraction_prompt(entity: dict, context: str) function that generates the LLM prompt.
-   IMPORTANT: This function should include FIELD-SPECIFIC extraction instructions for EACH field.
-   For each field, include:
-   - What to look for (e.g., "Look for 'Ph.D.' or 'Doctorate' followed by university name")
-   - Where it's typically found (e.g., "Usually in Education section or CV")
-   - Common patterns (e.g., "Email format: username@institution.edu")
-   - What NOT to confuse it with (e.g., "Don't confuse visiting positions with permanent rank")
-7. GROUND_TRUTH dict (if sample data has values, use them as ground truth, keyed by the primary field value like person's name)
-8. EVALUATION_CONFIG dict
+1. DATASET_NAME, DATASET_DESCRIPTION
+2. ENTITY_SCHEMA = {{"primary_field": "{entity_field_keys[0] if entity_field_keys else 'name'}", "fields": {entity_field_keys}}}
+3. TARGET_ENTITIES = [] (leave as empty list — it will be populated automatically)
+4. EXTRACTION_FIELDS list — each item: {{"key": "snake_case", "label": "Human Label", "description": "detailed guidance", "example": "value", "required": True/False}}
+5. SEARCH_QUERY_TEMPLATES list — 4-6 templates using DOUBLE-BRACE placeholders: {entity_placeholder_examples}
+6. def get_extraction_prompt(entity: dict, context: str) -> str — include per-field instructions (what to look for, where, patterns)
+7. GROUND_TRUTH = {{}}
+8. EVALUATION_CONFIG = {{"metric": "f1", "threshold": 0.7}}
 
-The file should be a complete, valid Python file that can be imported.
-Use the exact structure shown below as a template:
-
-```python
-#!/usr/bin/env python3
-\"\"\"
-Pipeline Configuration - Dynamic field definitions and prompts
-\"\"\"
-
-DATASET_NAME = "..."
-DATASET_DESCRIPTION = "..."
-
-ENTITY_SCHEMA = {{
-    "primary_field": "<first entity field key>",
-    "fields": [<all entity field keys>]
-}}
-
-TARGET_ENTITIES = [...]
-
-EXTRACTION_FIELDS = [...]
-
-SEARCH_QUERY_TEMPLATES = [...]
-
-def get_extraction_prompt(entity: dict, context: str) -> str:
-    ...
-
-GROUND_TRUTH = {{...}}
-
-EVALUATION_CONFIG = {{...}}
-```
-
-Return ONLY the Python code, no explanation."""
+Return ONLY valid Python code, no explanation or markdown fences."""
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model_id,
                 messages=[
-                    {"role": "system", "content": "You are a Python developer generating configuration files. Return only valid Python code."},
+                    {"role": "system", "content": "You are a Python developer. Generate a complete, valid Python configuration file. Return ONLY the raw Python code with no markdown fences, no explanation."},
                     {"role": "user", "content": prompt}
                 ],
-                **self._make_token_kwargs(self.model_id, 4000)
+                **self._make_token_kwargs(self.model_id, 3000)
             )
 
-            config_code = response.choices[0].message.content
+            msg = response.choices[0].message
+            config_code = msg.content or ""
 
-            # Clean up code blocks
+            # Log refusal if model refused
+            if getattr(msg, 'refusal', None):
+                self.log(f"Model refused: {msg.refusal}", "ERROR")
+                return None
+
+            self.log(f"  → raw response length: {len(config_code)} chars")
+
+            if not config_code.strip():
+                self.log("Empty response from LLM for config generation", "ERROR")
+                self.log(f"  finish_reason: {response.choices[0].finish_reason}", "ERROR")
+                return None
+
+            # Clean up code fences
             if "```python" in config_code:
                 config_code = config_code.split("```python")[1].split("```")[0].strip()
             elif "```" in config_code:
                 config_code = config_code.split("```")[1].split("```")[0].strip()
 
-            # POST-PROCESSING: Ensure ALL entities are included
-            # The LLM might truncate or modify entities, so we force-replace them
+            self.log(f"  → cleaned code length: {len(config_code)} chars")
+
+            # POST-PROCESSING: force-inject all entities and fix ENTITY_SCHEMA
             config_code = self._inject_entities(config_code, all_entities, schema.ground_truth)
 
             self.log(f"Configuration generated successfully ({len(config_code)} chars)")
