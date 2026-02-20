@@ -52,17 +52,44 @@ class AgenticSetup:
     All other file operations will be rejected.
     """
 
-    def __init__(self):
-        self.api_key = os.getenv('DEEPSEEK_API_KEY') or os.getenv('DEEPSEEK_API')
-        if self.api_key:
-            self.client = OpenAI(
-                api_key=self.api_key,
-                base_url="https://api.deepseek.com"
-            )
-            print("[OK] LLM client initialized")
-        else:
-            self.client = None
-            print("[WARN] No API key found - agent will not function")
+    def __init__(self, model: str = None):
+        # Import model registry from research_pipeline
+        try:
+            from research_pipeline import build_llm_client, DEFAULT_MODEL, MODEL_CONFIGS, make_token_kwargs
+            self._make_token_kwargs = make_token_kwargs
+            chosen = model or DEFAULT_MODEL
+            try:
+                self.client, self.model_id = build_llm_client(chosen)
+                cfg = MODEL_CONFIGS.get(chosen, {})
+                print(f"[OK] LLM client initialized: {cfg.get('label', chosen)}")
+            except ValueError as e:
+                # Fallback: try any available model
+                self.client = None
+                self.model_id = chosen
+                print(f"[WARN] {e} — trying fallback")
+                for mid in MODEL_CONFIGS:
+                    try:
+                        self.client, self.model_id = build_llm_client(mid)
+                        print(f"[OK] Fallback LLM: {mid}")
+                        break
+                    except ValueError:
+                        continue
+                if not self.client:
+                    print("[WARN] No LLM API key found - agent will not function")
+        except ImportError:
+            # Minimal fallback if research_pipeline not available
+            api_key = os.getenv('DEEPSEEK_API_KEY') or os.getenv('DEEPSEEK_API') or os.getenv('OPENAI_API_KEY')
+            self.model_id = "deepseek-chat" if os.getenv('DEEPSEEK_API_KEY') else "gpt-5-nano"
+            if api_key:
+                kwargs = {"api_key": api_key}
+                if os.getenv('DEEPSEEK_API_KEY'):
+                    kwargs["base_url"] = "https://api.deepseek.com"
+                self.client = OpenAI(**kwargs)
+            else:
+                self.client = None
+                print("[WARN] No API key found - agent will not function")
+            # Fallback token helper
+            self._make_token_kwargs = lambda mid, n: {"max_tokens": n}
 
         self.logs = []
 
@@ -114,7 +141,7 @@ class AgenticSetup:
         self.log(f"Using rows {start_row} to {end_row} ({len(rows)} entities)")
 
         # Identify entity fields vs target fields
-        # Common entity identifiers
+        # Common entity identifiers - ORDER MATTERS: 'name' should be primary for people
         entity_identifiers = ['name', 'institution', 'university', 'organization',
                              'company', 'state', 'country', 'id', 'entity']
 
@@ -134,6 +161,12 @@ class AgenticSetup:
                     'label': header,
                     'original_header': header
                 })
+        
+        # IMPORTANT: Reorder entity_fields so 'name' comes first if present
+        # This ensures the primary_field is the person's name, not institution
+        name_fields = [f for f in entity_fields if 'name' in f.lower()]
+        other_fields = [f for f in entity_fields if 'name' not in f.lower()]
+        entity_fields = name_fields + other_fields
 
         # Determine entity type from first entity field
         entity_type = "entity"
@@ -187,6 +220,7 @@ class AgenticSetup:
         Uses LLM to understand and structure the instructions.
         """
         self.log("Parsing instructions with LLM...")
+        self.log(f"  → model={self.model_id}, input_len={len(instruction_text)} chars")
 
         if not self.client:
             self.log("No LLM client - using basic parsing", "WARN")
@@ -215,12 +249,12 @@ Return ONLY valid JSON."""
 
         try:
             response = self.client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.model_id,
                 messages=[
                     {"role": "system", "content": "You are a research assistant that extracts structured information from instruction documents. Return only valid JSON."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=1000
+                **self._make_token_kwargs(self.model_id, 1000)
             )
 
             result_text = response.choices[0].message.content
@@ -245,6 +279,8 @@ Return ONLY valid JSON."""
 
         except Exception as e:
             self.log(f"LLM parsing failed: {e}", "ERROR")
+            import traceback
+            self.log(traceback.format_exc(), "ERROR")
             return Instructions(
                 goal="Extract information from web sources",
                 hints=[],
@@ -267,6 +303,7 @@ Return ONLY valid JSON."""
         Use LLM to generate pipeline_config.py content based on schema and instructions.
         """
         self.log("Generating pipeline configuration with LLM...")
+        self.log(f"  → model={self.model_id}, entities={len(schema.sample_entities)}, fields={len(schema.target_fields)}")
 
         if not self.client:
             self.log("No LLM client - cannot generate config", "ERROR")
@@ -311,17 +348,24 @@ RESEARCH INSTRUCTIONS:
 Generate a complete pipeline_config.py file with:
 
 1. DATASET_NAME and DATASET_DESCRIPTION
-2. ENTITY_SCHEMA dict - with "primary_field" (the key used for display/lookup, e.g. the first entity field key) and "fields" (list of all entity dict key names)
+2. ENTITY_SCHEMA dict - with "primary_field" (should be 'name' for people, or the main identifier) and "fields" (list of all entity dict key names)
 3. TARGET_ENTITIES list - CRITICAL: You MUST include ALL {entity_count} entities provided above. Copy them exactly.
 4. EXTRACTION_FIELDS list - each field should have:
    - key: snake_case identifier
    - label: Human readable label
-   - description: What to look for (use field guidance if available)
+   - description: DETAILED extraction guidance (what to look for, where to find it, common patterns)
    - example: An example value
    - required: True/False
 5. SEARCH_QUERY_TEMPLATES list - generate 4-6 search templates using entity field placeholders like {entity_placeholder_examples}
-6. get_extraction_prompt(entity: dict, context: str) function that generates the LLM prompt. Access entity fields via entity.get('field_name').
-7. GROUND_TRUTH dict (if sample data has values, use them as ground truth)
+   IMPORTANT: Use DOUBLE BRACES for placeholders: {{{{name}}}}, {{{{institution}}}}, etc.
+6. get_extraction_prompt(entity: dict, context: str) function that generates the LLM prompt.
+   IMPORTANT: This function should include FIELD-SPECIFIC extraction instructions for EACH field.
+   For each field, include:
+   - What to look for (e.g., "Look for 'Ph.D.' or 'Doctorate' followed by university name")
+   - Where it's typically found (e.g., "Usually in Education section or CV")
+   - Common patterns (e.g., "Email format: username@institution.edu")
+   - What NOT to confuse it with (e.g., "Don't confuse visiting positions with permanent rank")
+7. GROUND_TRUTH dict (if sample data has values, use them as ground truth, keyed by the primary field value like person's name)
 8. EVALUATION_CONFIG dict
 
 The file should be a complete, valid Python file that can be imported.
@@ -359,12 +403,12 @@ Return ONLY the Python code, no explanation."""
 
         try:
             response = self.client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.model_id,
                 messages=[
                     {"role": "system", "content": "You are a Python developer generating configuration files. Return only valid Python code."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=4000
+                **self._make_token_kwargs(self.model_id, 4000)
             )
 
             config_code = response.choices[0].message.content
@@ -379,11 +423,13 @@ Return ONLY the Python code, no explanation."""
             # The LLM might truncate or modify entities, so we force-replace them
             config_code = self._inject_entities(config_code, all_entities, schema.ground_truth)
 
-            self.log("Configuration generated successfully")
+            self.log(f"Configuration generated successfully ({len(config_code)} chars)")
             return config_code
 
         except Exception as e:
             self.log(f"Config generation failed: {e}", "ERROR")
+            import traceback
+            self.log(traceback.format_exc(), "ERROR")
             return None
 
     # =========================================================================
@@ -423,6 +469,126 @@ Return ONLY the Python code, no explanation."""
             return False, msg
 
     # =========================================================================
+    # CONFIG VERIFICATION (Post-generation validation)
+    # =========================================================================
+
+    def verify_config(self, config_code: str, schema: DatasetSchema, instructions: Instructions) -> Dict:
+        """
+        Verify generated config using a separate LLM call with different prompt.
+        Checks for common issues and suggests fixes.
+        
+        Returns:
+            Dict with 'valid', 'issues', 'suggestions', and optionally 'fixed_config'
+        """
+        self.log("Verifying generated configuration...")
+        
+        if not self.client:
+            return {'valid': True, 'issues': [], 'suggestions': [], 'skipped': True}
+        
+        # Extract key parts for verification
+        verification_prompt = f"""You are a code reviewer. Analyze this Python configuration file for a data extraction pipeline.
+
+GENERATED CONFIG:
+```python
+{config_code[:4000]}
+```
+
+EXPECTED SCHEMA:
+- Entity fields: {schema.entity_fields}
+- Target fields to extract: {[f['key'] for f in schema.target_fields]}
+- Number of entities: {len(schema.sample_entities)}
+- Entity type: {schema.entity_type}
+
+RESEARCH GOAL: {instructions.goal}
+
+Check for these common issues:
+1. SEARCH_QUERY_TEMPLATES: Do templates use correct placeholder syntax? Should be {{{{field_name}}}} (double braces).
+2. ENTITY_SCHEMA: Is primary_field set to the right field? For people, it should be 'name', not 'institution'.
+3. TARGET_ENTITIES: Are all {len(schema.sample_entities)} entities included?
+4. EXTRACTION_FIELDS: Do field keys match what's needed for extraction?
+5. get_extraction_prompt: Does it properly access entity fields via entity.get('field_name')?
+6. GROUND_TRUTH: Is it keyed by the primary field (e.g., person's name)?
+
+Return a JSON object:
+{{
+    "valid": true/false,
+    "issues": ["List of issues found"],
+    "suggestions": ["Specific fixes for each issue"],
+    "critical_issues": ["Issues that would cause the pipeline to fail"]
+}}
+
+Return ONLY valid JSON."""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[
+                    {"role": "system", "content": "You are a code reviewer that identifies bugs and issues. Return only valid JSON."},
+                    {"role": "user", "content": verification_prompt}
+                ],
+                **self._make_token_kwargs(self.model_id, 1000)
+            )
+            
+            result_text = response.choices[0].message.content
+            
+            # Clean up JSON
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0].strip()
+            
+            result = json.loads(result_text)
+            
+            # Log findings
+            if result.get('issues'):
+                for issue in result['issues']:
+                    self.log(f"Verification issue: {issue}", "WARN")
+            
+            if result.get('critical_issues'):
+                for issue in result['critical_issues']:
+                    self.log(f"CRITICAL: {issue}", "ERROR")
+            
+            if result.get('valid', True):
+                self.log("Configuration verified successfully")
+            else:
+                self.log(f"Configuration has {len(result.get('issues', []))} issues", "WARN")
+            
+            return result
+            
+        except Exception as e:
+            self.log(f"Verification failed: {e}", "WARN")
+            return {'valid': True, 'issues': [], 'suggestions': [], 'error': str(e)}
+
+    def auto_fix_config(self, config_code: str, verification_result: Dict) -> str:
+        """
+        Automatically fix common issues found during verification.
+        """
+        if not verification_result.get('issues') and not verification_result.get('critical_issues'):
+            return config_code
+        
+        self.log("Attempting to auto-fix configuration issues...")
+        
+        fixed_code = config_code
+        
+        # Fix 1: Ensure double braces in SEARCH_QUERY_TEMPLATES
+        # Convert {field} to {{field}} in templates
+        import re as regex
+        
+        def fix_template_braces(match):
+            template_content = match.group(0)
+            # Find single-brace placeholders and double them
+            # But don't double already-doubled braces
+            fixed = regex.sub(r'(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})', r'{{\1}}', template_content)
+            return fixed
+        
+        # Apply to SEARCH_QUERY_TEMPLATES section
+        templates_pattern = r'SEARCH_QUERY_TEMPLATES\s*=\s*\[[\s\S]*?\]'
+        fixed_code = regex.sub(templates_pattern, fix_template_braces, fixed_code)
+        
+        self.log("Applied automatic fixes to configuration")
+        return fixed_code
+
+    # =========================================================================
     # MAIN WORKFLOW
     # =========================================================================
 
@@ -433,7 +599,8 @@ Return ONLY the Python code, no explanation."""
         extra_instructions: str = "",
         auto_write: bool = False,
         start_row: int = 0,
-        end_row: int = None
+        end_row: int = None,
+        verify: bool = True
     ) -> Dict:
         """
         Main workflow: Parse inputs → Generate config → Optionally write.
@@ -451,6 +618,7 @@ Return ONLY the Python code, no explanation."""
         """
         self.clear_logs()
         self.log("Starting agentic setup process...")
+        self.log(f"Using model: {self.model_id}")
 
         result = {
             'success': False,
@@ -498,9 +666,22 @@ Return ONLY the Python code, no explanation."""
 
         result['config'] = config
 
-        # Step 4: Optionally write config
+        # Step 4: Verify config (if enabled)
+        if verify:
+            verification = self.verify_config(config, schema, instructions)
+            result['verification'] = verification
+            
+            # Auto-fix if issues found
+            if not verification.get('valid', True) or verification.get('issues'):
+                fixed_config = self.auto_fix_config(config, verification)
+                if fixed_config != config:
+                    result['config'] = fixed_config
+                    result['config_was_fixed'] = True
+                    self.log("Configuration was automatically fixed")
+
+        # Step 5: Optionally write config
         if auto_write:
-            success, msg = self.write_config(config)
+            success, msg = self.write_config(result['config'])
             result['config_written'] = success
             self.log(msg)
 
@@ -524,7 +705,16 @@ Return ONLY the Python code, no explanation."""
 
         # Determine entity field keys from actual data
         entity_keys = list(entities[0].keys()) if entities else []
-        primary_key = entity_keys[0] if entity_keys else None
+        
+        # IMPORTANT: Determine primary_key - prefer 'name' field for people datasets
+        # This ensures ground truth is keyed by person name, not institution
+        primary_key = None
+        for key in entity_keys:
+            if 'name' in key.lower():
+                primary_key = key
+                break
+        if not primary_key:
+            primary_key = entity_keys[0] if entity_keys else None
 
         # Generate the correct TARGET_ENTITIES string
         entities_str = "TARGET_ENTITIES = " + json.dumps(entities, indent=4)
@@ -538,7 +728,7 @@ Return ONLY the Python code, no explanation."""
         else:
             self.log("Could not find TARGET_ENTITIES pattern to replace", "WARN")
 
-        # Inject/fix ENTITY_SCHEMA
+        # Inject/fix ENTITY_SCHEMA - ensure primary_field is the name field
         if entity_keys:
             schema_dict = {"primary_field": primary_key, "fields": entity_keys}
             schema_str = "ENTITY_SCHEMA = " + json.dumps(schema_dict)
@@ -552,24 +742,23 @@ Return ONLY the Python code, no explanation."""
                 config_code = config_code.replace(entities_str, schema_str + "\n\n" + entities_str)
                 self.log(f"Added ENTITY_SCHEMA: primary={primary_key}, fields={entity_keys}")
 
-        # Also fix GROUND_TRUTH to include all entities
+        # Also fix GROUND_TRUTH to include all entities, keyed by primary field (name)
         if ground_truth and primary_key:
             full_ground_truth = {}
             for entity in entities:
                 primary_value = entity.get(primary_key, str(entity))
                 if primary_value in ground_truth:
                     full_ground_truth[primary_value] = ground_truth[primary_value]
-                else:
-                    # Create ground truth entry from all entity fields
-                    full_ground_truth[primary_value] = dict(entity)
+                # Note: Don't create empty ground truth entries - only include if we have actual data
 
-            ground_truth_str = "GROUND_TRUTH = " + json.dumps(full_ground_truth, indent=4)
+            if full_ground_truth:
+                ground_truth_str = "GROUND_TRUTH = " + json.dumps(full_ground_truth, indent=4)
 
-            # Replace existing GROUND_TRUTH
-            gt_pattern = r'GROUND_TRUTH\s*=\s*\{[\s\S]*?\n\}'
-            if regex.search(gt_pattern, config_code):
-                config_code = regex.sub(gt_pattern, ground_truth_str, config_code)
-                self.log(f"Injected ground truth for {len(full_ground_truth)} entities")
+                # Replace existing GROUND_TRUTH
+                gt_pattern = r'GROUND_TRUTH\s*=\s*\{[\s\S]*?\n\}'
+                if regex.search(gt_pattern, config_code):
+                    config_code = regex.sub(gt_pattern, ground_truth_str, config_code)
+                    self.log(f"Injected ground truth for {len(full_ground_truth)} entities")
 
         return config_code
 
