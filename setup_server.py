@@ -9,7 +9,7 @@ Combined server for the complete workflow:
 from flask import Flask, render_template, Response, jsonify, request
 import json
 import time
-from faculty_research_pipeline import ResearchPipeline
+from research_pipeline import ResearchPipeline, get_available_models, DEFAULT_MODEL
 from results_manager import ResultsManager
 from agentic_setup import AgenticSetup
 from evaluation import Evaluator, QA_METRICS_AVAILABLE
@@ -65,6 +65,7 @@ def generate_config():
         extra = data.get('extra', '')
         start_row = data.get('start_row', 0)
         end_row = data.get('end_row', None)
+        selected_model = data.get('model', DEFAULT_MODEL)
 
         if not instructions or not dataset:
             return jsonify({
@@ -73,7 +74,10 @@ def generate_config():
                 'logs': ['[ERROR] Missing required input files']
             })
 
-        result = agent.process(
+        # Create a fresh agent instance per request so model choice is respected
+        request_agent = AgenticSetup(model=selected_model)
+
+        result = request_agent.process(
             dataset_csv=dataset,
             instructions_text=instructions,
             extra_instructions=extra,
@@ -129,6 +133,13 @@ def research_page():
     return render_template('research.html')
 
 
+@app.route('/api/models')
+def list_models():
+    """Return available LLM models (those with API keys configured)"""
+    models = get_available_models()
+    return jsonify({'models': models, 'default': DEFAULT_MODEL})
+
+
 @app.route('/api/config')
 def get_config():
     """Return current pipeline configuration"""
@@ -137,12 +148,26 @@ def get_config():
         import importlib
         import pipeline_config
         importlib.reload(pipeline_config)
+        
+        # Get entity schema with fallback
+        entity_schema = getattr(pipeline_config, 'ENTITY_SCHEMA', None)
+        if not entity_schema:
+            # Infer from TARGET_ENTITIES
+            entities = getattr(pipeline_config, 'TARGET_ENTITIES', [])
+            if entities and isinstance(entities[0], dict):
+                keys = list(entities[0].keys())
+                # Prefer 'name' as primary field
+                primary = next((k for k in keys if 'name' in k.lower()), keys[0])
+                entity_schema = {"primary_field": primary, "fields": keys}
+            else:
+                entity_schema = {"primary_field": "name", "fields": ["name"]}
 
         return jsonify({
             'dataset_name': getattr(pipeline_config, 'DATASET_NAME', 'Unknown'),
             'dataset_description': getattr(pipeline_config, 'DATASET_DESCRIPTION', ''),
             'fields': getattr(pipeline_config, 'EXTRACTION_FIELDS', []),
             'entities': getattr(pipeline_config, 'TARGET_ENTITIES', []),
+            'entity_schema': entity_schema,
             'ground_truth': getattr(pipeline_config, 'GROUND_TRUTH', None),
             'has_evaluator': evaluator is not None
         })
@@ -150,40 +175,38 @@ def get_config():
         return jsonify({
             'error': str(e),
             'fields': [],
-            'entities': []
+            'entities': [],
+            'entity_schema': {"primary_field": "name", "fields": ["name"]}
         })
 
 
 @app.route('/api/research/process')
 def research_process():
-    """Server-Sent Events endpoint for research process"""
+    """Server-Sent Events endpoint — delegates all logic to process_entity()."""
+    selected_model = request.args.get('model', DEFAULT_MODEL)
 
     def generate():
-        """Generate SSE events for the research process"""
         try:
-            # Dynamically import to get latest config
             import importlib
             import pipeline_config
             importlib.reload(pipeline_config)
 
             entities = getattr(pipeline_config, 'TARGET_ENTITIES', [])
-            fields = getattr(pipeline_config, 'EXTRACTION_FIELDS', [])
+            fields   = getattr(pipeline_config, 'EXTRACTION_FIELDS', [])
             ground_truth = getattr(pipeline_config, 'GROUND_TRUTH', None)
 
             if not entities:
                 yield f"event: error\ndata: {json.dumps({'error': 'No entities configured'})}\n\n"
                 return
 
-            # Send config info
-            yield f"event: config\ndata: {json.dumps({'entities': entities, 'fields': fields})}\n\n"
+            yield f"event: config\ndata: {json.dumps({'entities': entities, 'fields': fields, 'model': selected_model})}\n\n"
 
-            pipeline = ResearchPipeline()
+            pipeline = ResearchPipeline(model=selected_model)
             results_manager = ResultsManager()
 
             try:
                 session_folder = results_manager.create_session_folder()
                 start_time = time.time()
-
                 pipeline.initialize()
 
                 all_results = []
@@ -192,88 +215,31 @@ def research_process():
                 log_entries = []
 
                 for idx, entity in enumerate(entities):
-                    # Send start event
                     yield f"event: start\ndata: {json.dumps({'index': idx, 'entity': entity})}\n\n"
 
-                    # Generate search queries
-                    search_queries = pipeline.generate_search_queries(entity)
-                    total_queries = len(search_queries)
+                    # on_event callback forwards pipeline events to SSE stream
+                    def on_event(event_type, data, _idx=idx):
+                        data['index'] = _idx
+                        return event_type, data
 
-                    all_documents = []
-                    texts_to_store = []
-                    urls_to_store = []
-                    query_types_to_store = []
+                    sse_queue = []
 
-                    # Execute searches
-                    for q_idx, query_info in enumerate(search_queries):
-                        query = query_info['query']
-                        query_type = query_info['type']
+                    def collect_event(event_type, data, _idx=idx):
+                        data['index'] = _idx
+                        sse_queue.append((event_type, data))
 
-                        progress = int((q_idx / total_queries) * 70)
-                        yield f"event: search\ndata: {json.dumps({'index': idx, 'description': query_info['description'], 'progress': progress, 'total_searches': pipeline.search_count})}\n\n"
+                    # Run full pipeline for this entity
+                    result = pipeline.process_entity(entity, on_event=collect_event)
 
-                        search_results = pipeline.search_google(query)
-                        time.sleep(1)
+                    # Flush queued SSE events
+                    for event_type, data in sse_queue:
+                        yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
-                        if search_results:
-                            yield f"event: result\ndata: {json.dumps({'index': idx, 'count': len(search_results), 'query_type': query_type})}\n\n"
-
-                        for result in search_results:
-                            text = f"{result['title']}. {result['description']}"
-                            url = result['url']
-
-                            texts_to_store.append(text)
-                            urls_to_store.append(url)
-                            query_types_to_store.append(query_type)
-
-                            all_documents.append({
-                                "query_type": query_type,
-                                "url": url,
-                                "text": text
-                            })
-
-                            unique_sources.add(url)
-
-                            # Scrape key URLs
-                            if query_type in ['profile', 'cv', 'site_specific'] and len([d for d in all_documents if d['query_type'].endswith('_full')]) < 3:
-                                yield f"event: scraping\ndata: {json.dumps({'index': idx, 'url': url[:50]})}\n\n"
-                                scraped = pipeline.scrape_content(url)
-                                if scraped:
-                                    texts_to_store.append(scraped)
-                                    urls_to_store.append(url)
-                                    query_types_to_store.append(f"{query_type}_full")
-                                    all_documents.append({
-                                        "query_type": f"{query_type}_full",
-                                        "url": url,
-                                        "text": scraped
-                                    })
-
-                    # Store in vector database
-                    if texts_to_store:
-                        yield f"event: storing\ndata: {json.dumps({'index': idx, 'count': len(texts_to_store)})}\n\n"
-
-                        entity_id = get_entity_primary_value(entity, pipeline_config)
-                        entity_meta = json.dumps(entity)
-
-                        pipeline.store_in_vector_db(
-                            entity_id,
-                            entity_meta,
-                            texts_to_store,
-                            urls_to_store,
-                            query_types_to_store
-                        )
-
-                    # Extract information
-                    yield f"event: extracting\ndata: {json.dumps({'index': idx})}\n\n"
-
-                    extracted_info = pipeline.extract_entity_info(
-                        entity,
-                        all_documents[:8]
-                    )
-
-                    # Evaluate if ground truth available
-                    eval_result = None
+                    extracted_info = result['extracted_info']
                     entity_id = get_entity_primary_value(entity, pipeline_config)
+
+                    # Evaluate against ground truth if available
+                    eval_result = None
                     if evaluator and ground_truth and entity_id in ground_truth:
                         eval_result = evaluator.evaluate_entity(
                             entity_name=entity_id,
@@ -282,63 +248,43 @@ def research_process():
                             fields_config=fields
                         )
 
-                    # Store result
-                    result = {
-                        "entity": entity,
-                        "documents_collected": len(all_documents),
-                        "sources": all_documents,
-                        "extracted_info": extracted_info
-                    }
                     all_results.append(result)
-                    total_documents += len(all_documents)
+                    total_documents += result['documents_collected']
+                    for src in result.get('sources', []):
+                        unique_sources.add(src.get('url', ''))
 
-                    # Send completion (with safe JSON serialization)
+                    # Send completion event
                     try:
                         complete_data = {
                             'index': idx,
-                            'documents': len(all_documents),
+                            'documents': result['documents_collected'],
                             'extracted_info': extracted_info,
                             'evaluation': eval_result
                         }
                         yield f"event: complete\ndata: {json.dumps(complete_data)}\n\n"
-                    except (TypeError, ValueError) as json_err:
-                        # Fallback if JSON serialization fails
-                        print(f"[WARN] JSON serialization error: {json_err}")
-                        safe_data = {
-                            'index': idx,
-                            'documents': len(all_documents),
-                            'extracted_info': {'error': 'Serialization failed'},
-                            'evaluation': None
-                        }
-                        yield f"event: complete\ndata: {json.dumps(safe_data)}\n\n"
+                    except (TypeError, ValueError):
+                        yield f"event: complete\ndata: {json.dumps({'index': idx, 'documents': result['documents_collected'], 'extracted_info': {'error': 'Serialization failed'}, 'evaluation': None})}\n\n"
 
-                    # Log
                     log_entries.append(f"PROCESSED: {get_entity_display(entity, pipeline_config)}")
 
-                    # Stats update
                     completion = int(((idx + 1) / len(entities)) * 100)
                     yield f"event: stats\ndata: {json.dumps({'total_documents': total_documents, 'unique_sources': len(unique_sources), 'completion': completion})}\n\n"
 
-                # Save results
+                # Save session
                 end_time = time.time()
-                processing_time = end_time - start_time
-
                 stats = {
                     'total_entities': len(all_results),
                     'total_documents': total_documents,
                     'unique_sources': len(unique_sources),
                     'total_searches': pipeline.search_count,
-                    'processing_time': f"{processing_time:.1f} seconds"
+                    'processing_time': f"{end_time - start_time:.1f} seconds"
                 }
-
                 saved_files = results_manager.save_results(all_results, session_folder)
                 results_manager.save_stats(stats, session_folder)
                 results_manager.save_session_log(log_entries, session_folder)
                 results_manager.create_summary_report(all_results, stats, session_folder)
 
-                # Send done
                 yield f"event: done\ndata: {json.dumps({'total': len(entities), 'searches': pipeline.search_count, 'session': str(session_folder)})}\n\n"
-
                 yield f"event: saved\ndata: {json.dumps({'session_folder': str(session_folder), 'files': saved_files})}\n\n"
 
             finally:
@@ -346,9 +292,7 @@ def research_process():
 
         except Exception as e:
             import traceback
-            error_trace = traceback.format_exc()
-            print(f"[ERROR] SSE Stream error: {e}")
-            print(error_trace)
+            print(f"[ERROR] SSE Stream error: {e}\n{traceback.format_exc()}")
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
