@@ -28,8 +28,14 @@ evaluator = Evaluator() if QA_METRICS_AVAILABLE else None
 
 @app.route('/')
 def index():
-    """Landing page - redirect to setup"""
-    return render_template('setup.html')
+    """Landing page — project overview"""
+    return render_template('overview.html')
+
+
+@app.route('/overview')
+def overview_page():
+    """Project overview / presentation page"""
+    return render_template('overview.html')
 
 
 @app.route('/setup')

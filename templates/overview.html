@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Data Pipeline — Overview</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:        #0a0a0a;
+            --surface:   #111111;
+            --surface2:  #1a1a1a;
+            --border:    #2a2a2a;
+            --text:      #e0e0e0;
+            --muted:     #666;
+            --green:     #00ff88;
+            --green-dim: #00ff8820;
+            --green-mid: #00cc6a;
+            --white:     #ffffff;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.65;
+        }
+
+        /* ── NAV ── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(10,10,10,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            height: 56px;
+        }
+
+        .nav-logo {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--white);
+            letter-spacing: -0.3px;
+        }
+
+        .nav-logo span { color: var(--green); }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-size: 13px;
+            color: var(--muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        /* ── SECTIONS ── */
+        section {
+            padding: 100px 40px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        section:first-of-type { padding-top: 140px; }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--green);
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: clamp(32px, 5vw, 56px);
+            font-weight: 600;
+            color: var(--white);
+            letter-spacing: -1.5px;
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        h2 {
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--white);
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+        }
+
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 8px;
+        }
+
+        p {
+            font-size: 16px;
+            color: #aaa;
+            max-width: 640px;
+        }
+
+        .lead {
+            font-size: 18px;
+            color: #bbb;
+            max-width: 680px;
+            margin-bottom: 48px;
+        }
+
+        /* ── HERO ── */
+        #hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding-top: 100px;
+            padding-bottom: 60px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--green-dim);
+            border: 1px solid #00ff8840;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 12px;
+            color: var(--green);
+            margin-bottom: 32px;
+            width: fit-content;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .hero-stats {
+            display: flex;
+            gap: 48px;
+            margin-top: 56px;
+            padding-top: 48px;
+            border-top: 1px solid var(--border);
+        }
+
+        .stat-item { }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--white);
+            letter-spacing: -1px;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .stat-number span { color: var(--green); }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* ── DIVIDER ── */
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0 40px;
+        }
+
+        /* ── FLOW CHART ── */
+        .flow-wrap {
+            margin-top: 56px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .flow {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            min-width: 900px;
+        }
+
+        .flow-node {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 20px;
+            text-align: center;
+            position: relative;
+            transition: border-color 0.2s, transform 0.2s;
+            cursor: default;
+        }
+
+        .flow-node:hover {
+            border-color: #00ff8860;
+            transform: translateY(-3px);
+        }
+
+        .flow-node.highlight {
+            border-color: #00ff8860;
+            background: #0d1f17;
+        }
+
+        .flow-icon {
+            font-size: 28px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .flow-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 6px;
+        }
+
+        .flow-sub {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .flow-tag {
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--green);
+            background: var(--green-dim);
+            border-radius: 4px;
+            padding: 2px 7px;
+        }
+
+        .flow-arrow {
+            flex-shrink: 0;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #444;
+            font-size: 18px;
+            position: relative;
+        }
+
+        .flow-arrow::before {
+            content: '';
+            position: absolute;
+            left: 4px; right: 4px;
+            height: 1px;
+            background: linear-gradient(90deg, #333, #555, #333);
+        }
+
+        .flow-arrow-head {
+            position: relative;
+            z-index: 1;
+            color: #555;
+            font-size: 14px;
+        }
+
+        /* ── COMPONENTS GRID ── */
+        .components-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 48px;
+        }
+
+        .component-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+            transition: border-color 0.2s;
+        }
+
+        .component-card:hover { border-color: #00ff8840; }
+
+        .component-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            background: var(--green-dim);
+            border: 1px solid #00ff8830;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .component-card p {
+            font-size: 14px;
+            color: #888;
+            max-width: none;
+            margin-top: 8px;
+        }
+
+        /* ── TWO-COL ── */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            margin-top: 48px;
+        }
+
+        @media (max-width: 768px) {
+            .two-col { grid-template-columns: 1fr; }
+            .flow { min-width: 700px; }
+            .hero-stats { gap: 28px; flex-wrap: wrap; }
+            nav { padding: 0 20px; }
+            section { padding: 80px 24px; }
+        }
+
+        /* ── MINI FLOW (vertical, for "how it works" detail) ── */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin-top: 48px;
+        }
+
+        .step {
+            display: flex;
+            gap: 24px;
+            position: relative;
+        }
+
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 19px;
+            top: 44px;
+            bottom: -24px;
+            width: 1px;
+            background: var(--border);
+        }
+
+        .step-num {
+            flex-shrink: 0;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--green);
+            margin-top: 2px;
+        }
+
+        .step-body {
+            padding-bottom: 40px;
+        }
+
+        .step-body h3 { margin-bottom: 6px; }
+
+        .step-body p {
+            font-size: 14px;
+            color: #888;
+            max-width: none;
+        }
+
+        .step-tech {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .tech-pill {
+            font-size: 11px;
+            color: #aaa;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 3px 10px;
+        }
+
+        /* ── NEXT STEPS ── */
+        .next-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 48px;
+        }
+
+        .next-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 22px;
+        }
+
+        .next-card .tag {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--green);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .next-card h3 { font-size: 14px; margin-bottom: 6px; }
+
+        .next-card p {
+            font-size: 13px;
+            color: #777;
+            max-width: none;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        footer p {
+            font-size: 12px;
+            color: var(--muted);
+            max-width: none;
+        }
+
+        .footer-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+    <div class="nav-logo">mini<span>-rag</span></div>
+    <ul class="nav-links">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#components">Components</a></li>
+        <li><a href="#next-steps">Next steps</a></li>
+    </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+    <div class="hero-badge">MVP — Research Data Pipeline</div>
+    <h1>Automated data<br>collection at scale</h1>
+    <p class="lead">
+        Drop a dataset and a plain-English instruction document. The pipeline
+        figures out what to search for, collects sources from the web, stores
+        them in a vector database, and uses an LLM to extract structured data —
+        all without writing a single line of code.
+    </p>
+
+    <!-- TOP-LEVEL FLOW -->
+    <div class="flow-wrap">
+        <div class="flow">
+            <div class="flow-node highlight">
+                <span class="flow-icon">📄</span>
+                <div class="flow-title">Your Dataset</div>
+                <div class="flow-sub">CSV + instructions<br>describing what to find</div>
+                <span class="flow-tag">INPUT</span>
+            </div>
+
+            <div class="flow-arrow"><span class="flow-arrow-head">›</span></div>
+
+            <div class="flow-node">
+                <span class="flow-icon">🤖</span>
+                <div class="flow-title">Agentic Setup</div>
+                <div class="flow-sub">LLM reads your instructions<br>and configures the pipeline</div>
+                <span class="flow-tag">AUTO-CONFIG</span>
+            </div>
+
+            <div class="flow-arrow"><span class="flow-arrow-head">›</span></div>
+
+            <div class="flow-node">
+                <span class="flow-icon">🔍</span>
+                <div class="flow-title">Web Search</div>
+                <div class="flow-sub">Targeted queries per entity<br>across multiple sources</div>
+                <span class="flow-tag">SEARCH API</span>
+            </div>
+
+            <div class="flow-arrow"><span class="flow-arrow-head">›</span></div>
+
+            <div class="flow-node highlight">
+                <span class="flow-icon">🗄️</span>
+                <div class="flow-title">Vector Database</div>
+                <div class="flow-sub">All collected text<br>stored as embeddings</div>
+                <span class="flow-tag">MILVUS</span>
+            </div>
+
+            <div class="flow-arrow"><span class="flow-arrow-head">›</span></div>
+
+            <div class="flow-node highlight">
+                <span class="flow-icon">✨</span>
+                <div class="flow-title">LLM Extraction</div>
+                <div class="flow-sub">Retrieves relevant chunks,<br>extracts structured fields</div>
+                <span class="flow-tag">RAG</span>
+            </div>
+
+            <div class="flow-arrow"><span class="flow-arrow-head">›</span></div>
+
+            <div class="flow-node">
+                <span class="flow-icon">📊</span>
+                <div class="flow-title">Structured Output</div>
+                <div class="flow-sub">Clean JSON, CSV,<br>and evaluation scores</div>
+                <span class="flow-tag">OUTPUT</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="hero-stats">
+        <div class="stat-item">
+            <div class="stat-number">10<span>+</span></div>
+            <div class="stat-label">entities per run</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">~<span>128</span></div>
+            <div class="stat-label">documents collected</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">0</div>
+            <div class="stat-label">lines of code to configure</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">Any</div>
+            <div class="stat-label">dataset type supported</div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+    <div class="section-label">How it works</div>
+    <h2>From raw data to structured insights</h2>
+    <p>The pipeline runs in two phases — setup and execution — both driven by language models with no manual configuration required.</p>
+
+    <div class="two-col">
+        <div class="steps">
+
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-body">
+                    <h3>Upload your dataset &amp; instructions</h3>
+                    <p>Drag in a CSV (your list of entities) and a plain-English document describing what you want to find. That's the only input.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">CSV</span>
+                        <span class="tech-pill">Plain text</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-body">
+                    <h3>Agent auto-configures the pipeline</h3>
+                    <p>An LLM reads your instructions and generates the search templates, extraction fields, and prompts needed to run the pipeline — verified and auto-fixed before use.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">DeepSeek / GPT</span>
+                        <span class="tech-pill">Auto-verification</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-body">
+                    <h3>Web search &amp; scraping</h3>
+                    <p>For each entity, the pipeline fires multiple targeted search queries, filters out irrelevant URLs, and scrapes full page content where useful.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">Serper API</span>
+                        <span class="tech-pill">BeautifulSoup</span>
+                        <span class="tech-pill">URL filtering</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-body">
+                    <h3>Stored in a vector database</h3>
+                    <p>Every collected document is embedded and stored in a local vector database, indexed by entity. Nothing is thrown away.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">Milvus Lite</span>
+                        <span class="tech-pill">BGE embeddings</span>
+                        <span class="tech-pill">COSINE similarity</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">5</div>
+                <div class="step-body">
+                    <h3>RAG extraction — field by field</h3>
+                    <p>For each field to extract, the most semantically relevant chunks are retrieved from the vector database and passed to the LLM. The model returns structured JSON with confidence scores.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">RAG</span>
+                        <span class="tech-pill">Per-field retrieval</span>
+                        <span class="tech-pill">Confidence scoring</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-num">6</div>
+                <div class="step-body">
+                    <h3>VDB retry for missing fields</h3>
+                    <p>Low-confidence or missing fields trigger a second round of targeted vector database queries — no extra web searches needed.</p>
+                    <div class="step-tech">
+                        <span class="tech-pill">VDB retry</span>
+                        <span class="tech-pill">Focused LLM call</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT: mini visual summary -->
+        <div>
+            <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; padding: 32px; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; line-height: 2; color: #666;">
+                <div style="color: #444; margin-bottom: 8px;">// pipeline output sample</div>
+                <div><span style="color:#00ff88">"name"</span>: <span style="color:#e0e0e0">"Jane Smith"</span>,</div>
+                <div><span style="color:#00ff88">"institution"</span>: <span style="color:#e0e0e0">"MIT"</span>,</div>
+                <div><span style="color:#00ff88">"phd_institution"</span>: <span style="color:#e0e0e0">"Harvard"</span>,</div>
+                <div><span style="color:#00ff88">"email"</span>: <span style="color:#e0e0e0">"j.smith@mit.edu"</span>,</div>
+                <div><span style="color:#00ff88">"rank"</span>: <span style="color:#e0e0e0">"Associate Professor"</span>,</div>
+                <div><span style="color:#00ff88">"department"</span>: <span style="color:#e0e0e0">"Computer Science"</span>,</div>
+                <div style="margin-top: 8px;"><span style="color:#555">"_avg_confidence"</span>: <span style="color:#00ff88">0.87</span></div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); color: #444; font-family: sans-serif; font-size: 12px;">
+                    ✓ &nbsp;JSON &nbsp;·&nbsp; CSV &nbsp;·&nbsp; Evaluation scores
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+                <div style="font-size: 12px; color: var(--muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px;">Works with any dataset</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">People</span>
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">Companies</span>
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">Universities</span>
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">Products</span>
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">Research papers</span>
+                    <span style="font-size: 12px; color: #aaa; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;">Any entity type</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="divider">
+
+<!-- COMPONENTS -->
+<section id="components">
+    <div class="section-label">Core components</div>
+    <h2>What's under the hood</h2>
+    <p>Each component is independent and swappable. The pipeline is dataset-agnostic by design.</p>
+
+    <div class="components-grid">
+
+        <div class="component-card">
+            <div class="component-icon">🤖</div>
+            <h3>Agentic Setup</h3>
+            <p>Reads your instructions and auto-generates the full pipeline configuration — search templates, extraction fields, and prompts. Includes a verification pass that catches and fixes common issues.</p>
+        </div>
+
+        <div class="component-card">
+            <div class="component-icon">🔍</div>
+            <h3>Search Layer</h3>
+            <p>Fires multiple targeted queries per entity using Serper (primary) with Google CSE as fallback. Templates are auto-generated from your dataset schema with entity-specific placeholders.</p>
+        </div>
+
+        <div class="component-card">
+            <div class="component-icon">🌐</div>
+            <h3>Web Scraper</h3>
+            <p>Fetches and cleans full page content from relevant URLs. Filters out PDFs, irrelevant domains, and low-quality pages before storing anything.</p>
+        </div>
+
+        <div class="component-card">
+            <div class="component-icon">🗄️</div>
+            <h3>Vector Database</h3>
+            <p>Every collected document is embedded using BGE and stored in Milvus Lite — a local, file-based vector store. Indexed by entity so retrieval is always scoped to the right data.</p>
+        </div>
+
+        <div class="component-card">
+            <div class="component-icon">✨</div>
+            <h3>RAG Extraction</h3>
+            <p>For each field, a semantic query retrieves the most relevant document chunks from the vector database. The LLM sees only the most relevant context — not a dump of everything collected.</p>
+        </div>
+
+        <div class="component-card">
+            <div class="component-icon">📊</div>
+            <h3>Evaluation</h3>
+            <p>If ground truth is available in your dataset, extraction quality is automatically scored using F1 and Exact Match metrics. Confidence scores are included in every output.</p>
+        </div>
+
+    </div>
+</section>
+
+<hr class="divider">
+
+<!-- NEXT STEPS -->
+<section id="next-steps">
+    <div class="section-label">Roadmap</div>
+    <h2>What comes next</h2>
+    <p>The core pipeline works end-to-end. These are the natural next improvements.</p>
+
+    <div class="next-grid">
+
+        <div class="next-card">
+            <span class="tag">Accuracy</span>
+            <h3>Verification layer</h3>
+            <p>Cross-check extracted values against a second independent source before accepting them as final.</p>
+        </div>
+
+        <div class="next-card">
+            <span class="tag">Coverage</span>
+            <h3>Smarter retry loops</h3>
+            <p>When a field is still missing after VDB retry, automatically generate new search queries targeting that specific gap.</p>
+        </div>
+
+        <div class="next-card">
+            <span class="tag">Data quality</span>
+            <h3>Scraping improvements</h3>
+            <p>Better content extraction from complex page layouts, JavaScript-rendered pages, and structured data formats.</p>
+        </div>
+
+        <div class="next-card">
+            <span class="tag">Scale</span>
+            <h3>Batch processing</h3>
+            <p>Run hundreds of entities in parallel with rate limiting, resumable sessions, and incremental output.</p>
+        </div>
+
+        <div class="next-card">
+            <span class="tag">Flexibility</span>
+            <h3>More data sources</h3>
+            <p>Plug in additional search providers, academic databases, or domain-specific APIs alongside web search.</p>
+        </div>
+
+        <div class="next-card">
+            <span class="tag">Evaluation</span>
+            <h3>Richer metrics</h3>
+            <p>Expand evaluation beyond F1/EM — semantic similarity scoring, field-level confidence calibration, and drift detection across runs.</p>
+        </div>
+
+    </div>
+</section>
+
+<hr class="divider">
+
+<footer>
+    <p>mini-rag-c2i &nbsp;·&nbsp; Research Data Pipeline &nbsp;·&nbsp; MVP</p>
+    <div class="footer-dot"></div>
+</footer>
+
+</body>
+</html>
