@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quick test to verify faculty research pipeline setup
+Quick check to verify research pipeline setup and credentials
 """
 
 import os
@@ -11,7 +11,7 @@ load_dotenv()
 def test_credentials():
     """Check if all required credentials are present"""
     print("="*60)
-    print("Faculty Research Pipeline - Setup Check")
+    print("C2I Research Pipeline - Setup Check")
     print("="*60)
     print()
 
@@ -56,8 +56,8 @@ def test_credentials():
     if all_good:
         print("\033[92m✓ All checks passed! Ready to run.\033[0m")
         print()
-        print("Start the dashboard with:")
-        print("  python faculty_dashboard.py")
+        print("Start the server with:")
+        print("  python setup_server.py")
         print()
         print("Then open: http://localhost:8081")
     else:

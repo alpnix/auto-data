@@ -23,11 +23,11 @@ evaluator = Evaluator() if QA_METRICS_AVAILABLE else None
 @app.route('/')
 def index():
     """Process visualization page"""
-    return render_template('faculty_process.html')
+    return render_template('research_process.html')
 
 
-@app.route('/api/faculty/process')
-def faculty_process():
+@app.route('/api/research/process')
+def research_process():
     """Server-Sent Events endpoint for real-time process updates"""
 
     def generate():

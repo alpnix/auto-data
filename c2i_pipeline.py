@@ -5,4 +5,5 @@ Use research_pipeline.py directly for all new code.
 """
 from research_pipeline import ResearchPipeline  # noqa: F401
 
-FacultyResearchPipeline = ResearchPipeline
+# Legacy alias kept for any old references
+C2IPipeline = ResearchPipeline

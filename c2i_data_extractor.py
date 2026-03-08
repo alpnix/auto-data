@@ -1,11 +1,11 @@
 """
-Faculty Demographics Data Extractor
+C2I Data Extractor
 
-Uses the existing RAG pipeline to automatically extract faculty demographic information
+Uses the existing RAG pipeline to automatically extract entity demographic information
 from web searches and profile pages.
 
-Given: Institution Name + Faculty Name
-Extract: All demographic features from ground truth dataset
+Given: Entity identifiers (e.g. name + institution)
+Extract: All target features defined in the dataset schema
 """
 
 import json
@@ -14,8 +14,8 @@ from typing import Dict, List, Optional
 from education_pipeline import EducationDataPipeline
 
 
-class FacultyDataExtractor:
-    """Extracts structured faculty demographic data using RAG pipeline"""
+class C2IDataExtractor:
+    """Extracts structured entity data using RAG pipeline"""
 
     def __init__(self, pipeline: EducationDataPipeline):
         """
@@ -719,11 +719,11 @@ def run_test_cases():
 
     # Initialize pipeline
     print("Initializing RAG pipeline...")
-    pipeline = EducationDataPipeline(collection_name="faculty_data")
+    pipeline = EducationDataPipeline(collection_name="research_data")
     pipeline.initialize()
 
     # Initialize extractor
-    extractor = FacultyDataExtractor(pipeline)
+    extractor = C2IDataExtractor(pipeline)
 
     # Run extraction on each test case
     all_results = []
