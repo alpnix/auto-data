@@ -22,19 +22,20 @@ Works with any entity type: people, companies, universities, products, etc.
 ## Quick start
 
 ```bash
-# 1. Install dependencies
-pip install flask sentence-transformers pymilvus openai python-dotenv \
-            beautifulsoup4 lxml requests qa-metrics
+# 1. Install dependencies (from project root)
+pip install -r requirements.txt
 
 # 2. Set environment variables
 cp .env.example .env   # then fill in your keys
 
 # 3. Start the server
-python setup_server.py
+python app.py
 
 # 4. Open browser
 open http://localhost:8080
 ```
+
+**Requirements:** `flask`, `sentence-transformers`, `pymilvus`, `openai`, `python-dotenv`, `beautifulsoup4`, `lxml`, `requests`. Optional: `qa-metrics` for F1/EM evaluation vs ground truth (app runs without it but skips evaluation).
 
 ---
 
@@ -83,34 +84,42 @@ OPENAI_API_KEY=your_openai_key              # optional (gpt-5-nano, gpt-4o-mini)
 ## File structure
 
 ```
-setup_server.py          — main Flask server (/ /setup /research /api/*)
-research_pipeline.py     — core pipeline: search, scrape, VDB, RAG extraction
-agentic_setup.py         — agent that generates pipeline_config.py from inputs
-pipeline_config.py       — auto-generated config (entities, fields, prompts)
-config_helpers.py        — helpers for loading config generically
-results_manager.py       — saves results to JSON/CSV/summary
-evaluation.py            — F1/EM evaluation against ground truth
+app.py                  — main Flask server (run from project root): / /setup /research /api/*
+pipeline_config.py      — auto-generated config (entities, fields, prompts); keep in root
 
-c2i_pipeline.py          — backward-compat shim → research_pipeline
-c2i_dashboard.py         — legacy standalone dashboard (SSE)
-c2i_data_extractor.py    — legacy feature-by-feature extractor
-c2i_setup_check.py       — credential + dependency checker
+core/
+  research_pipeline.py  — core pipeline: search, scrape, VDB, RAG extraction
+  agentic_setup.py      — agent that generates pipeline_config.py from inputs
+  config_helpers.py     — helpers for loading config generically
+  results_manager.py    — saves results to JSON/CSV/summary
+  evaluation.py         — F1/EM evaluation against ground truth
+
+legacy/
+  c2i_pipeline.py       — backward-compat shim → core.research_pipeline
+  c2i_dashboard.py      — legacy standalone dashboard (SSE)
+  c2i_data_extractor.py — legacy feature-by-feature extractor
+  c2i_setup_check.py    — credential + dependency checker
+
+scripts/
+  view_sessions.py      — list/view/compare saved sessions; export summary CSV
+  compare_results.py    — compare extracted data vs ground truth
+  debug_sources.py      — inspect sources collected per session
 
 templates/
-  overview.html          — presentation/overview page (also at /)
-  setup.html             — setup UI
-  research.html          — research dashboard UI
+  overview.html         — presentation/overview page (also at /)
+  setup.html            — setup UI
+  research.html         — research dashboard UI
 
-INFERENCE_DATA/          — sample input files for testing
-  *.csv                  — sample entity dataset
-  *.txt                  — sample instructions document
+INFERENCE_DATA/         — sample input files for testing
+  *.csv                 — sample entity dataset
+  *.txt                 — sample instructions document
 ```
 
 ---
 
 ## Key components
 
-### `research_pipeline.py`
+### `core/research_pipeline.py`
 
 - `ResearchPipeline` — main class
 - `generate_search_queries()` — builds queries from `SEARCH_QUERY_TEMPLATES` with `{{field}}` substitution
@@ -122,7 +131,7 @@ INFERENCE_DATA/          — sample input files for testing
 - `vdb_retry_missing_fields()` — second-pass VDB queries for missing/low-confidence fields
 - `process_entity()` — orchestrates all phases; `on_event` callback for SSE streaming
 
-### `agentic_setup.py`
+### `core/agentic_setup.py`
 
 - `parse_csv_dataset()` — detects entity vs target fields, builds ground truth
 - `parse_instructions()` — LLM extracts goal/hints/strategies; rule-based fallback
@@ -183,3 +192,4 @@ SUMMARY.txt           — human-readable summary
 | Milvus connection error | Delete `milvus_research.db` to reset |
 | No search results | Check `SERPER` key; fallback to `GOOGLE_CUSTOM_SEARCH_KEY` + `GOOGLE_CSE_ID` |
 | Config generation produces 0 chars | Prompt too large for model — use DeepSeek |
+| F1/EM evaluation not available   | Install optional dependency: `pip install qa-metrics` |

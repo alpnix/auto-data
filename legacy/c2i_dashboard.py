@@ -4,17 +4,20 @@ Research Dashboard with Real-Time Process Visualization
 Shows live progress of data collection using Server-Sent Events.
 Dataset-agnostic: reads entity/field definitions from pipeline_config.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, render_template, Response, jsonify
 import json
 import time
-from research_pipeline import ResearchPipeline
-from results_manager import ResultsManager
-from evaluation import Evaluator, QA_METRICS_AVAILABLE
-from config_helpers import load_config, get_entity_primary_value, get_entity_display
+from core.research_pipeline import ResearchPipeline
+from core.results_manager import ResultsManager
+from core.evaluation import Evaluator, QA_METRICS_AVAILABLE
+from core.config_helpers import load_config, get_entity_primary_value, get_entity_display
 import importlib
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=str(Path(__file__).resolve().parent.parent / 'templates'))
 
 # Initialize evaluator
 evaluator = Evaluator() if QA_METRICS_AVAILABLE else None

@@ -5,7 +5,7 @@ Evaluation Module - PEDANTS and other metrics for comparing extracted vs ground 
 
 from typing import Dict, List, Optional, Tuple
 import json
-from config_helpers import get_entity_primary_value
+from core.config_helpers import get_entity_primary_value
 
 # Try to import qa_metrics, gracefully handle if not installed
 QA_METRICS_AVAILABLE = False

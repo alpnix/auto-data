@@ -3,8 +3,11 @@
 Compare extracted entity data with ground truth.
 Reads field definitions from pipeline_config for dataset-agnostic comparison.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config_helpers import load_config, get_entity_primary_value, get_entity_display
+from core.config_helpers import load_config, get_entity_primary_value, get_entity_display
 
 
 def normalize_value(value):
@@ -126,9 +129,9 @@ if __name__ == "__main__":
         with open(sys.argv[1], 'r') as f:
             extracted_list = json.load(f)
     else:
-        print("Usage: python compare_results.py <results.json>")
+        print("Usage: python scripts/compare_results.py <results.json>")
         print("\nOr run the pipeline first to generate results:")
-        print("  python research_pipeline.py")
+        print("  python app.py")
         print("\nThis script compares extracted data against ground truth from pipeline_config.")
         sys.exit(1)
 

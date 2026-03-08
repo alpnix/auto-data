@@ -2,17 +2,17 @@
 """
 Debug script to see what sources were actually collected
 """
-
 import json
 import sys
 from pathlib import Path
 
 if len(sys.argv) < 2:
-    print("Usage: python debug_sources.py <session_folder>")
-    print("\nExample: python debug_sources.py 20260117_180828")
+    print("Usage: python scripts/debug_sources.py <session_folder>")
+    print("\nExample: python scripts/debug_sources.py 20260117_180828")
     sys.exit(1)
 
-session_folder = Path("research_results") / sys.argv[1]
+root = Path(__file__).resolve().parent.parent
+session_folder = root / "research_results" / sys.argv[1]
 results_file = session_folder / "full_results.json"
 
 if not results_file.exists():

@@ -22,9 +22,9 @@ from openai import OpenAI
 from bs4 import BeautifulSoup
 import json
 import time
-from results_manager import ResultsManager
+from core.results_manager import ResultsManager
 import importlib
-from config_helpers import (
+from core.config_helpers import (
     load_config, get_entity_schema, get_primary_field,
     get_entity_primary_value, get_entity_display, get_entity_fields
 )
