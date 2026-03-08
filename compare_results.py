@@ -128,7 +128,7 @@ if __name__ == "__main__":
     else:
         print("Usage: python compare_results.py <results.json>")
         print("\nOr run the pipeline first to generate results:")
-        print("  python faculty_research_pipeline.py")
+        print("  python research_pipeline.py")
         print("\nThis script compares extracted data against ground truth from pipeline_config.")
         sys.exit(1)
 

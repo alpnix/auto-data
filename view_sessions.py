@@ -23,7 +23,7 @@ def list_all_sessions():
         print("No sessions found.")
         print()
         print("Run the pipeline to create a session:")
-        print("  python faculty_research_pipeline.py")
+        print("  python research_pipeline.py")
         print("  or")
         print("  python setup_server.py")
         return
