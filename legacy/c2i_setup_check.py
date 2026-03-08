@@ -57,9 +57,9 @@ def test_credentials():
         print("\033[92m✓ All checks passed! Ready to run.\033[0m")
         print()
         print("Start the server with:")
-        print("  python setup_server.py")
+        print("  python app.py")
         print()
-        print("Then open: http://localhost:8081")
+        print("Then open: http://localhost:8080")
     else:
         print("\033[91m✗ Setup incomplete. Please fix the issues above.\033[0m")
         print()
@@ -69,7 +69,7 @@ def test_credentials():
         print("  DEEPSEEK_API_KEY=your_key")
         print()
         print("Missing packages? Install with:")
-        print("  pip install flask sentence-transformers pymilvus openai beautifulsoup4 lxml")
+        print("  pip install -r requirements.txt")
 
     print("="*60)
 

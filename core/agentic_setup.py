@@ -9,6 +9,7 @@ import os
 import json
 import csv
 import re
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from dotenv import load_dotenv
@@ -17,11 +18,16 @@ from openai import OpenAI
 load_dotenv()
 
 # =============================================================================
-# SECURITY: Define allowed write targets
+# SECURITY: Define allowed write targets (basename only; written to project root)
 # =============================================================================
 ALLOWED_WRITE_FILES = [
     "pipeline_config.py"
 ]
+
+
+def _project_root() -> Path:
+    """Project root directory (parent of core/)."""
+    return Path(__file__).resolve().parent.parent
 
 
 @dataclass
@@ -55,7 +61,7 @@ class AgenticSetup:
     def __init__(self, model: str = None):
         # Import model registry from research_pipeline
         try:
-            from research_pipeline import build_llm_client, DEFAULT_MODEL, MODEL_CONFIGS, make_token_kwargs
+            from core.research_pipeline import build_llm_client, DEFAULT_MODEL, MODEL_CONFIGS, make_token_kwargs
             self._make_token_kwargs = make_token_kwargs
             chosen = model or DEFAULT_MODEL
             try:
@@ -436,11 +442,13 @@ Return ONLY valid Python code, no explanation or markdown fences."""
             self.log(msg, "ERROR")
             return False, msg
 
-        # Write file
+        # Write file (to project root so import pipeline_config works)
         try:
-            with open(filename, 'w') as f:
+            root = _project_root()
+            path = root / filename
+            with open(path, 'w') as f:
                 f.write(config_content)
-            self.log(f"Configuration written to {filename}")
+            self.log(f"Configuration written to {path}")
             return True, f"Successfully wrote {filename}"
         except Exception as e:
             msg = f"Failed to write file: {e}"

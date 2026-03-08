@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from config_helpers import (
+from core.config_helpers import (
     load_config, get_entity_schema, get_entity_primary_value,
     get_entity_display, get_entity_fields
 )

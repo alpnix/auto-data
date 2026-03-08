@@ -2,16 +2,18 @@
 """
 View and compare saved research sessions
 """
-
 import sys
-import json
 from pathlib import Path
-from results_manager import ResultsManager
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import json
+from core.results_manager import ResultsManager
 
 
 def list_all_sessions():
     """List all saved sessions"""
-    manager = ResultsManager()
+    root = Path(__file__).resolve().parent.parent
+    manager = ResultsManager(base_dir=str(root / "research_results"))
     sessions = manager.list_sessions()
 
     print("=" * 80)
@@ -23,9 +25,7 @@ def list_all_sessions():
         print("No sessions found.")
         print()
         print("Run the pipeline to create a session:")
-        print("  python research_pipeline.py")
-        print("  or")
-        print("  python setup_server.py")
+        print("  python app.py")
         return
 
     print(f"Found {len(sessions)} session(s):\n")
@@ -41,14 +41,15 @@ def list_all_sessions():
     print("=" * 80)
     print()
     print("To view a session summary:")
-    print(f"  python view_sessions.py {sessions[0]['folder']}")
+    print(f"  python scripts/view_sessions.py {sessions[0]['folder']}")
     print()
 
 
 def view_session(session_name: str):
     """View detailed session information"""
-    manager = ResultsManager()
-    session_path = manager.base_dir / session_name
+    root = Path(__file__).resolve().parent.parent
+    manager = ResultsManager(base_dir=str(root / "research_results"))
+    session_path = Path(manager.base_dir) / session_name
 
     if not session_path.exists():
         print(f"Error: Session '{session_name}' not found")
@@ -89,10 +90,10 @@ def view_session(session_name: str):
 
 def compare_sessions(session1_name: str, session2_name: str):
     """Compare two research sessions"""
-    manager = ResultsManager()
-
-    session1_path = manager.base_dir / session1_name
-    session2_path = manager.base_dir / session2_name
+    root = Path(__file__).resolve().parent.parent
+    manager = ResultsManager(base_dir=str(root / "research_results"))
+    session1_path = Path(manager.base_dir) / session1_name
+    session2_path = Path(manager.base_dir) / session2_name
 
     if not session1_path.exists() or not session2_path.exists():
         print("Error: One or both sessions not found")
@@ -152,14 +153,15 @@ def compare_sessions(session1_name: str, session2_name: str):
 
 def export_csv_summary():
     """Export summary of all sessions to CSV"""
-    manager = ResultsManager()
+    root = Path(__file__).resolve().parent.parent
+    manager = ResultsManager(base_dir=str(root / "research_results"))
     sessions = manager.list_sessions()
 
     if not sessions:
         print("No sessions to export")
         return
 
-    output_file = manager.base_dir / "all_sessions_summary.csv"
+    output_file = Path(manager.base_dir) / "all_sessions_summary.csv"
 
     import csv
     with open(output_file, 'w', newline='') as f:
@@ -168,7 +170,7 @@ def export_csv_summary():
                         'Unique Sources', 'Total Searches', 'Processing Time'])
 
         for session in sessions:
-            stats_file = manager.base_dir / session['folder'] / 'stats.json'
+            stats_file = Path(manager.base_dir) / session['folder'] / 'stats.json'
             if stats_file.exists():
                 with open(stats_file, 'r') as sf:
                     stats = json.load(sf)
@@ -204,10 +206,10 @@ def main():
 
     else:
         print("Usage:")
-        print("  python view_sessions.py                    - List all sessions")
-        print("  python view_sessions.py <session_name>     - View session details")
-        print("  python view_sessions.py <s1> <s2>          - Compare two sessions")
-        print("  python view_sessions.py --export           - Export summary CSV")
+        print("  python scripts/view_sessions.py                    - List all sessions")
+        print("  python scripts/view_sessions.py <session_name>     - View session details")
+        print("  python scripts/view_sessions.py <s1> <s2>          - Compare two sessions")
+        print("  python scripts/view_sessions.py --export           - Export summary CSV")
 
 
 if __name__ == "__main__":

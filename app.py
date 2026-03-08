@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Setup Server - Serves both the agentic setup UI and research dashboard
-Combined server for the complete workflow:
+Main Flask app: agentic setup UI and research dashboard.
+Run from project root: python app.py
+
+Workflow:
 1. Setup: Drop files → Agent configures pipeline
 2. Research: Run pipeline → View results with evaluation
 """
@@ -9,11 +11,11 @@ Combined server for the complete workflow:
 from flask import Flask, render_template, Response, jsonify, request
 import json
 import time
-from research_pipeline import ResearchPipeline, get_available_models, DEFAULT_MODEL
-from results_manager import ResultsManager
-from agentic_setup import AgenticSetup
-from evaluation import Evaluator, QA_METRICS_AVAILABLE
-from config_helpers import get_entity_primary_value, get_entity_display
+from core.research_pipeline import ResearchPipeline, get_available_models, DEFAULT_MODEL
+from core.results_manager import ResultsManager
+from core.agentic_setup import AgenticSetup
+from core.evaluation import Evaluator, QA_METRICS_AVAILABLE
+from core.config_helpers import get_entity_primary_value, get_entity_display
 
 app = Flask(__name__)
 
@@ -154,7 +156,7 @@ def get_config():
         import importlib
         import pipeline_config
         importlib.reload(pipeline_config)
-        
+
         # Get entity schema with fallback
         entity_schema = getattr(pipeline_config, 'ENTITY_SCHEMA', None)
         if not entity_schema:
