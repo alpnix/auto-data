@@ -622,12 +622,12 @@
             if (badge) badge.textContent = text;
         }
 
-        function displayResults(index, data) {
+        // Render extracted fields for one entity card; `evaluation` is null when no ground truth exists.
+        function displayResults(index, data, evaluation) {
             const resultsDiv = document.getElementById(`results-${index}`);
             const extractedDiv = document.getElementById(`extracted-${index}`);
             if (!resultsDiv || !extractedDiv) return;
 
-            const evaluation = data.evaluation;
             const configFields = config.fields || [];
             const groundTruth = config.ground_truth || {};
 
@@ -655,9 +655,7 @@
             }
 
             // Build field list: use extracted data keys, map to config labels where possible
-            const extractedKeys = Object.keys(data).filter(k =>
-                !['error', 'evaluation', 'documents', 'sources'].includes(k)
-            );
+            const extractedKeys = Object.keys(data).filter(k => !k.startsWith('_') && k !== 'error');
 
             // Create a map from config for labels
             const configFieldMap = {};
@@ -787,7 +785,7 @@
                 addLog(data.index, `Complete! ${data.documents} docs`, 'success');
                 updateBadge(data.index, 'Complete');
                 updateProgress(data.index, 100);
-                displayResults(data.index, data.extracted_info);
+                displayResults(data.index, data.extracted_info, data.evaluation);
             });
 
             eventSource.addEventListener('stats', (e) => {

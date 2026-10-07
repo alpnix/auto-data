@@ -1,66 +1,48 @@
-#!/usr/bin/env python3
 """
-Config Helpers - Centralized access to pipeline_config with backward-compatible defaults.
-All pipeline files import from here instead of duplicating fallback logic.
+Read access to the generated pipeline_config.py.
+
+The config file is rewritten by the setup agent while the server is running, so
+every reader calls load_config() to get a freshly reloaded module instead of
+caching it at import time.
+
+Components:
+  load_config               reload and return the pipeline_config module (None if missing/broken)
+  get_entity_schema         {"primary_field": ..., "fields": [...]} with inference fallback
+  get_entity_primary_value  the value that identifies one entity (e.g. the person's name)
+  get_entity_display        human-readable "field1 - field2" label for logs and reports
 """
 
 import importlib
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 
 def load_config():
-    """Load and reload pipeline_config, returning the module or None."""
+    """Import (or re-import) pipeline_config from the project root."""
     try:
         import pipeline_config
-        importlib.reload(pipeline_config)
-        return pipeline_config
+        return importlib.reload(pipeline_config)
     except Exception:
         return None
 
 
 def get_entity_schema(config=None) -> Dict:
-    """
-    Return ENTITY_SCHEMA from config or infer from TARGET_ENTITIES.
-
-    Returns:
-        {"primary_field": "name", "fields": ["name", "institution"]}
-    """
-    if config is None:
-        config = load_config()
-
-    # Try explicit ENTITY_SCHEMA first
-    schema = getattr(config, 'ENTITY_SCHEMA', None) if config else None
+    """Explicit ENTITY_SCHEMA if present, otherwise inferred from the first entity's keys."""
+    config = config or load_config()
+    schema = getattr(config, "ENTITY_SCHEMA", None)
     if schema:
         return schema
-
-    # Infer from TARGET_ENTITIES keys
-    entities = getattr(config, 'TARGET_ENTITIES', []) if config else []
-    if entities and isinstance(entities[0], dict):
+    entities = getattr(config, "TARGET_ENTITIES", [])
+    if entities:
         keys = list(entities[0].keys())
-        return {"primary_field": keys[0], "fields": keys}
-
-    # Ultimate fallback
+        primary = next((k for k in keys if "name" in k.lower()), keys[0])
+        return {"primary_field": primary, "fields": keys}
     return {"primary_field": "name", "fields": ["name"]}
 
 
-def get_primary_field(config=None) -> str:
-    """Return the primary field name (e.g., 'name', 'company')."""
-    return get_entity_schema(config)["primary_field"]
+def get_entity_primary_value(entity: Dict, config=None) -> str:
+    return str(entity.get(get_entity_schema(config)["primary_field"], entity))
 
 
-def get_entity_fields(config=None) -> List[str]:
-    """Return all entity field names."""
-    return get_entity_schema(config)["fields"]
-
-
-def get_entity_primary_value(entity: dict, config=None) -> str:
-    """Return the primary identifier value for an entity (e.g., the person's name)."""
-    primary = get_primary_field(config)
-    return entity.get(primary, str(entity))
-
-
-def get_entity_display(entity: dict, config=None) -> str:
-    """Return a human-readable display string for an entity (e.g., 'John Doe - MIT')."""
-    schema = get_entity_schema(config)
-    parts = [str(entity.get(f, '')) for f in schema["fields"] if entity.get(f)]
-    return " - ".join(parts) if parts else str(entity)
+def get_entity_display(entity: Dict, config=None) -> str:
+    parts = [str(entity[f]) for f in get_entity_schema(config)["fields"] if entity.get(f)]
+    return " - ".join(parts) or str(entity)
