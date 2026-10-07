@@ -568,10 +568,12 @@
         }
 
         function createEntityCard(entity, index) {
-            // Get display name from entity object
-            const values = Object.values(entity);
-            const name = values[0] || `Entity ${index + 1}`;
-            const meta = values.slice(1).filter(v => v).join(' | ');
+            // Title the card with the schema's primary field (JSON key order is not reliable).
+            const schema = config.entity_schema || {};
+            const primary = schema.primary_field || Object.keys(entity)[0];
+            const name = entity[primary] || `Entity ${index + 1}`;
+            const meta = (schema.fields || Object.keys(entity))
+                .filter(f => f !== primary && entity[f]).map(f => entity[f]).join(' | ');
 
             return `
                 <div class="entity-card" id="card-${index}">

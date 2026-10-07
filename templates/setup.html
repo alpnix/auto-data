@@ -546,19 +546,20 @@ Example:
             const headers = lines[0].split(',').map(h => h.trim());
             const preview = document.getElementById('schema-preview');
 
-            // Simple heuristic for entity fields
+            // Mirror the server-side heuristic: identifier-like columns are entity fields,
+            // with the name column first so it becomes the primary field.
             const entityFields = headers.filter(h =>
                 h.toLowerCase().includes('name') ||
                 h.toLowerCase().includes('institution') ||
                 h.toLowerCase().includes('id')
-            ).slice(0, 2);
+            ).slice(0, 2).sort((a, b) => a.toLowerCase().includes('name') ? -1 : b.toLowerCase().includes('name') ? 1 : 0);
 
             const targetFields = headers.filter(h => !entityFields.includes(h));
 
             totalRows = lines.length - 1;
 
             document.getElementById('schema-type').textContent =
-                headers[0].toLowerCase().includes('name') ? 'person' : 'entity';
+                (entityFields[0] || '').toLowerCase().includes('name') ? 'person' : 'entity';
             document.getElementById('schema-entity').textContent = entityFields.join(', ') || 'auto-detect';
             document.getElementById('schema-target').textContent =
                 targetFields.slice(0, 5).join(', ') + (targetFields.length > 5 ? '...' : '');
