@@ -243,9 +243,9 @@ class ResearchPipeline:
         context = self._retrieve_context(entity, entity_id, fields, top_k=4, max_docs=12)
 
         prompt_fn = getattr(config, "get_extraction_prompt", None)
-        if prompt_fn:
-            prompt = prompt_fn(entity, context)
-        else:
+        prompt = prompt_fn(entity, context) if prompt_fn else None
+        if not isinstance(prompt, str) or not prompt.strip():
+            # Config prompt missing or broken: fall back to a generic one built from the field list.
             wanted = {f["key"]: f.get("description", f["label"]) for f in fields} or {"info": "Any relevant information"}
             prompt = (f"Extract information about {get_entity_display(entity, config)} from these sources.\n\n"
                       f"{context}\n\nReturn ONLY a JSON object with these fields "

@@ -22,14 +22,22 @@ The repo ships with a working `pipeline_config.py` for the sample faculty datase
 ### Environment variables
 
 ```env
-SERPER_API_KEY=...             # web search (primary)
-GOOGLE_CUSTOM_SEARCH_KEY=...   # web search (fallback)
+# web search
+SERPER_API_KEY=...             # primary
+GOOGLE_CUSTOM_SEARCH_KEY=...   # fallback
 GOOGLE_CSE_ID=...
-DEEPSEEK_API_KEY=...           # LLM (default model: deepseek-chat)
-OPENAI_API_KEY=...             # LLM (gpt-5-nano, gpt-4o-mini)
+
+# LLM via Amazon Bedrock (default): any standard AWS credential source works
+AWS_PROFILE=admin
+AWS_REGION=us-east-1
+# AWS_BEARER_TOKEN_BEDROCK=... # alternative: a Bedrock API key instead of a profile
+
+# LLM via vendor APIs (optional)
+DEEPSEEK_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
-`SERPER` and `DEEPSEEK_API` are accepted as alternative names.
+The model dropdowns only list models whose credentials are present. `SERPER` and `DEEPSEEK_API` are accepted as alternative names.
 
 ---
 
@@ -57,7 +65,7 @@ app.py                     Flask server: pages + JSON/SSE API (see module docstr
 pipeline_config.py         Generated config: entities, fields, templates, prompt, ground truth
 
 core/
-  llm.py                   Model registry, client construction, chat_text / chat_json helpers
+  llm.py                   Model registry (Bedrock + OpenAI-compatible), clients, chat_text / chat_json
   config_helpers.py        Reload pipeline_config and read the entity schema from it
   agentic_setup.py         CSV + instructions → pipeline_config.py (LLM drafts, code injects data)
   research_pipeline.py     Search → scrape → Milvus → RAG extraction → retry
@@ -114,13 +122,18 @@ research_results/<timestamp>/
 
 ## Models
 
-| Model | Env key | Notes |
-|---|---|---|
-| `deepseek-chat` | `DEEPSEEK_API_KEY` | Default. Large output budget, best for config generation |
-| `gpt-5-nano` | `OPENAI_API_KEY` | Uses `max_completion_tokens`; small prompts only |
-| `gpt-4o-mini` | `OPENAI_API_KEY` | Balanced |
+| Model id | Provider | Credentials | Notes |
+|---|---|---|---|
+| `us.amazon.nova-micro-v1:0` | Bedrock | AWS | Cheapest; fine for extraction of short pages |
+| `us.amazon.nova-lite-v1:0` | Bedrock | AWS | **Default.** Good cost/quality for extraction |
+| `us.amazon.nova-pro-v1:0` | Bedrock | AWS | Stronger Nova tier |
+| `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Bedrock | AWS | Recommended for the Setup page (writes clean configs) |
+| `us.anthropic.claude-sonnet-4-5-20250929-v1:0` | Bedrock | AWS | Highest quality, highest cost |
+| `deepseek.v3.2`, `us.meta.llama3-3-70b-instruct-v1:0` | Bedrock | AWS | Open-weight alternatives |
+| `deepseek-chat` | DeepSeek | `DEEPSEEK_API_KEY` | Direct API |
+| `gpt-4o-mini`, `gpt-5-nano` | OpenAI | `OPENAI_API_KEY` | Direct API |
 
-Add a model by appending to `MODEL_CONFIGS` in `core/llm.py`.
+Bedrock calls use the Converse API through boto3 and the normal AWS credential chain. If `AWS_BEARER_TOKEN_BEDROCK` is set, Bedrock's OpenAI-compatible endpoint is used instead. Setup and Research can use different models; the setup agent validates the generated prompt function and substitutes a standard one if a weaker model produces something unusable. Add a model by appending to `MODEL_CONFIGS` in `core/llm.py`.
 
 ---
 
@@ -128,8 +141,9 @@ Add a model by appending to `MODEL_CONFIGS` in `core/llm.py`.
 
 | Symptom | Fix |
 |---|---|
-| Dropdown shows "No models available" | No LLM key in `.env` |
-| Empty or truncated generated config | Switch the setup model to DeepSeek |
+| Dropdown shows "No models available" | No AWS credentials (`AWS_PROFILE`) and no vendor key in `.env` |
+| `AccessDeniedException` from Bedrock | Enable the model in the Bedrock console for your region, or pick another model |
+| Empty or truncated generated config | Switch the setup model to Claude Haiku 4.5 |
 | Milvus errors after changing schema | Delete `milvus_research.db` |
 | No search results | Check `SERPER_API_KEY`, or set the Google CSE pair |
 | Scores not shown on the dashboard | Entity's primary value must be a key in `GROUND_TRUTH` |

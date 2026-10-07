@@ -6,3 +6,4 @@ beautifulsoup4>=4.12.0       # HTML -> text
 lxml>=5.0.0                  # fast HTML parser for BeautifulSoup
 sentence-transformers>=2.2.2 # BGE embeddings
 pymilvus>=2.3.4              # Milvus Lite vector store
+boto3>=1.35.0                # Amazon Bedrock (Converse API)

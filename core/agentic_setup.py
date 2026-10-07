@@ -31,6 +31,35 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENTITY_HINTS = ("name", "institution", "university", "organization", "company", "state", "country", "id")
 
 
+# Fallback get_extraction_prompt, appended verbatim when the LLM's version fails validation.
+# It reads EXTRACTION_FIELDS from the same module at call time, so it is always consistent.
+STANDARD_PROMPT_FUNCTION = '''
+def get_extraction_prompt(entity: dict, context: str) -> str:
+    identity = " | ".join(f"{k}: {v}" for k, v in entity.items())
+    field_lines = "\\n".join(
+        f"- {f['key']}: {f.get('description', f.get('label', f['key']))}"
+        + (f" (e.g. {f['example']})" if f.get("example") else "")
+        for f in EXTRACTION_FIELDS
+    )
+    json_keys = ",\\n".join(f'  "{f["key"]}": ""' for f in EXTRACTION_FIELDS)
+    return f"""Extract information about the entity below from the provided sources.
+
+ENTITY: {identity}
+
+SOURCES:
+{context}
+
+FIELDS:
+{field_lines}
+
+Rules: use only what the sources support; write "Not available" for anything you cannot find.
+Return ONLY a JSON object with exactly these keys:
+{{
+{json_keys}
+}}"""
+'''
+
+
 @dataclass
 class DatasetSchema:
     entity_type: str            # "person", "institution", "company", ... (only used in prompts)
@@ -189,8 +218,31 @@ Return ONLY valid Python code."""
         # Normalise {field} -> {{field}} inside the templates list so substitution always works.
         code = re.sub(r"SEARCH_QUERY_TEMPLATES\s*=\s*\[[\s\S]*?\]",
                       lambda m: re.sub(r"(?<!\{)\{([a-zA-Z_]\w*)\}(?!\})", r"{{\1}}", m.group(0)), code, count=1)
+        code = self._ensure_prompt_function(code, schema)
         self.log(f"Injected {len(schema.entities)} entities and {len(schema.ground_truth)} ground-truth rows")
         return code
+
+    def _ensure_prompt_function(self, code: str, schema: DatasetSchema) -> str:
+        """
+        Smaller models often return a dict, forget the context, or drop field keys from
+        get_extraction_prompt. Exercise it once; if the result is not a prompt string that
+        includes the context and every field key, replace it with a deterministic version
+        that is built from EXTRACTION_FIELDS at run time.
+        """
+        keys = [t["key"] for t in schema.target_fields]
+        try:
+            ns: Dict = {}
+            exec(compile(code, CONFIG_FILENAME, "exec"), ns)
+            sample = schema.entities[0] if schema.entities else {}
+            out = ns["get_extraction_prompt"](sample, "__CONTEXT__")
+            ok = isinstance(out, str) and "__CONTEXT__" in out and all(f'"{k}"' in out for k in keys)
+        except Exception as e:
+            ok, out = False, e
+        if ok:
+            return code
+        self.log("Generated get_extraction_prompt was unusable; replaced with the standard template", "WARN")
+        code = re.sub(r"\ndef get_extraction_prompt\([\s\S]*?(?=\n(?:[A-Z_]+\s*=|def |$))", "\n", code, count=1)
+        return code.rstrip() + "\n\n" + STANDARD_PROMPT_FUNCTION
 
     # ── 3. review & save ─────────────────────────────────────────────────────
 
